@@ -292,7 +292,17 @@ Skor = geçen kontrol oranı × 100, her uyarı için −3 (en fazla −15).
 
 ## Kontrol paneli
 
-`http://127.0.0.1:8080/backend`. Koyu tema, masaüstü ve telefonda çalışır, internet bağlantısı gerektirmez.
+`http://127.0.0.1:8080/backend`. Solda bölümler arası gezinme (Eğitim, Veri, Playground, Kalite kontrolü), üstte parametre, sözlük, veri ve doğrulama loss kartları. Açık ve koyu temayı işletim sistemine göre seçer, telefonda da çalışır, internet bağlantısı gerektirmez.
+
+## Arkadaşına göstermek (cloudflared)
+
+Sunucu yalnızca `127.0.0.1`'e bağlanır. Dışarıya açmak için ayrı bir terminalde:
+
+```bash
+cloudflared tunnel --url http://127.0.0.1:8080
+```
+
+Çıktıdaki `https://....trycloudflare.com` adresini paylaşın. Tünelden gelen ziyaretçi **yalnızca stüdyoyu** kullanabilir: `/`, `/api/generate`, `/api/qc` ve kısaltılmış `/api/status`. Panel, eğitim, veri ekleme ve web çekimi uçları 403 döner; bunlar sadece Elalem'in çalıştığı bilgisayardan açılır. Tünel isteği `Cf-Connecting-Ip` / `X-Forwarded-For` başlığı ya da `127.0.0.1` / `localhost` dışındaki `Host` başlığıyla tanınır. Tüneli kapatmak için o terminalde Ctrl+C.
 
 | Bölüm | İçerik |
 |---|---|

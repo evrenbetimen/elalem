@@ -1513,205 +1513,241 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Elalem LLM</title>
+<title>Elalem · Model paneli</title>
 <style>
   :root {
-    --bg: #0b0d12; --panel: #12151d; --panel2: #171b25; --border: #232838;
-    --text: #e7e9ee; --muted: #8a91a5; --accent: #6c8cff; --accent2: #9f7aea;
-    --ok: #22c55e; --ok-bg: rgba(34,197,94,.10); --err: #ef4444; --err-bg: rgba(239,68,68,.10);
-    --warn: #f5b041; --code: #0e1118;
+    --bg: #faf9f6; --sidebar: #f3f1ec; --surface: #ffffff; --surface2: #f5f3ee; --border: #e6e2d9; --border2: #d8d3c7;
+    --text: #1f1e1c; --muted: #6f6b62; --faint: #9a958a;
+    --accent: #1f6f63; --accent-hover: #175a50; --accent-soft: #e1efec;
+    --ok: #2f7d4f; --ok-bg: #e6f2ea; --err: #b4372f; --err-bg: #f9e4e1; --warn: #9a6a12; --warn-bg: #f7eedb;
+    --code-bg: #f7f6f2; --chart-train: #1f6f63; --chart-val: #c98a2b; --chart-grid: #ece8df;
+    --shadow: 0 1px 2px rgba(31,30,28,.04), 0 2px 8px rgba(31,30,28,.04);
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
     --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1b19; --sidebar: #181715; --surface: #252421; --surface2: #2d2b28; --border: #393631; --border2: #4a463f;
+      --text: #ece9e2; --muted: #a8a397; --faint: #7d786d;
+      --accent: #3fa391; --accent-hover: #52b5a3; --accent-soft: #1e332f;
+      --ok: #6cc28f; --ok-bg: #1f3328; --err: #ef8a80; --err-bg: #3d2420; --warn: #e0b45c; --warn-bg: #3a3020;
+      --code-bg: #201f1c; --chart-train: #3fa391; --chart-val: #e0b45c; --chart-grid: #34322e;
+      --shadow: 0 1px 2px rgba(0,0,0,.2);
+    }
+  }
   * { box-sizing: border-box; }
-  html, body { margin: 0; background: var(--bg); color: var(--text);
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 14px; }
-  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
-    padding: 16px 24px; border-bottom: 1px solid var(--border); background: rgba(18,21,29,.85);
-    position: sticky; top: 0; backdrop-filter: blur(8px); z-index: 5; }
-  .brand { display: flex; align-items: center; gap: 12px; }
-  .logo { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; font-weight: 800;
-    background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; font-size: 18px; }
-  .brand h1 { margin: 0; font-size: 18px; letter-spacing: .3px; }
-  .brand small { color: var(--muted); display: block; font-size: 12px; }
-  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
-  .chip { padding: 5px 10px; border-radius: 999px; background: var(--panel2); border: 1px solid var(--border);
-    color: var(--muted); font-size: 12px; white-space: nowrap; }
-  .chip b { color: var(--text); font-weight: 600; }
-  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-right: 6px; }
-  .dot.live { background: var(--ok); box-shadow: 0 0 0 4px rgba(34,197,94,.15); animation: pulse 1.4s infinite; }
-  @keyframes pulse { 50% { box-shadow: 0 0 0 7px rgba(34,197,94,0); } }
+  html { scroll-behavior: smooth; scroll-padding-top: 20px; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 14px; line-height: 1.5;
+    -webkit-font-smoothing: antialiased; display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 100vh; }
+  button, input, textarea { font: inherit; color: inherit; }
+  code { font-family: var(--mono); font-size: 12.5px; background: var(--surface2); padding: 1px 5px; border-radius: 5px; }
 
-  main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; padding: 18px 24px 32px;
-    max-width: 1500px; margin: 0 auto; }
-  .col { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
-  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 18px; min-width: 0; }
-  .panel h2 { margin: 0 0 4px; font-size: 15px; display: flex; align-items: center; gap: 8px; }
-  .panel .sub { color: var(--muted); font-size: 12px; margin: 0 0 14px; }
-  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; }
-  .field { display: flex; flex-direction: column; gap: 6px; flex: 1 1 110px; min-width: 0; }
-  .field label { font-size: 12px; color: var(--muted); }
-  input[type=number], input[type=text], textarea {
-    width: 100%; background: var(--panel2); color: var(--text); border: 1px solid var(--border);
-    border-radius: 9px; padding: 9px 11px; font: inherit; outline: none; transition: border-color .15s; }
-  input:focus, textarea:focus { border-color: var(--accent); }
+  /* Kenar çubuğu */
+  aside { position: sticky; top: 0; height: 100vh; background: var(--sidebar); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; padding: 16px 12px; gap: 4px; }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px 16px; font-family: var(--serif); font-size: 19px; }
+  .brand svg { width: 26px; height: 26px; color: var(--accent); }
+  .brand small { display: block; font-family: var(--sans); font-size: 11.5px; color: var(--faint); margin-top: -2px; }
+  .nav-label { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--faint); padding: 10px 10px 4px; }
+  aside a.nav { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--muted);
+    text-decoration: none; font-size: 13.5px; }
+  aside a.nav:hover { background: var(--surface2); color: var(--text); }
+  aside a.nav.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+  aside a.nav svg { width: 16px; height: 16px; flex: none; }
+  .side-foot { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
+  .status-card { border: 1px solid var(--border); background: var(--surface); border-radius: 10px; padding: 10px 12px; font-size: 12.5px; }
+  .status-card .row1 { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+  .status-card .row2 { color: var(--faint); margin-top: 2px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; }
+  .dot.live { background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); animation: pulse 1.4s infinite; }
+  @keyframes pulse { 50% { opacity: .45; } }
+
+  /* İçerik */
+  .content { padding: 28px clamp(16px, 4vw, 44px) 60px; max-width: 1280px; width: 100%; }
+  .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
+  .page-head h1 { font-family: var(--serif); font-weight: 400; font-size: 30px; margin: 0; letter-spacing: -.2px; }
+  .page-head p { margin: 4px 0 0; color: var(--muted); }
+  .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; box-shadow: var(--shadow); }
+  .kpi span { display: block; color: var(--muted); font-size: 12px; }
+  .kpi b { display: block; font-size: 20px; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; box-shadow: var(--shadow); margin-bottom: 20px; }
+  .panel h2 { margin: 0; font-size: 16px; font-weight: 600; }
+  .panel .sub { margin: 4px 0 16px; color: var(--muted); font-size: 13px; }
+  .row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+  .field { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 140px; }
+  .field label { font-size: 12.5px; color: var(--muted); display: flex; justify-content: space-between; }
+  .field .val { color: var(--text); font-weight: 600; }
+  input[type=text], input[type=number], textarea { width: 100%; border: 1px solid var(--border2); background: var(--surface); border-radius: 9px;
+    padding: 8px 11px; outline: none; transition: border-color .15s, box-shadow .15s; }
+  input:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
   input[type=range] { width: 100%; accent-color: var(--accent); }
-  button { font: inherit; border: 1px solid transparent; border-radius: 9px; padding: 9px 16px; cursor: pointer;
-    font-weight: 600; transition: transform .05s, opacity .15s, background .15s; white-space: nowrap; }
-  button:active { transform: translateY(1px); }
-  button:disabled { opacity: .45; cursor: not-allowed; }
+  button { cursor: pointer; border-radius: 9px; padding: 8px 14px; border: 1px solid transparent; font-weight: 500; font-size: 13.5px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px; transition: background .15s, border-color .15s, opacity .15s; white-space: nowrap; }
+  button:disabled { opacity: .45; cursor: default; }
   .btn-primary { background: var(--accent); color: #fff; }
-  .btn-primary:hover:not(:disabled) { background: #5a7bf0; }
-  .btn-ghost { background: var(--panel2); color: var(--text); border-color: var(--border); }
-  .btn-ghost:hover:not(:disabled) { border-color: var(--muted); }
-  .btn-danger { background: transparent; color: var(--err); border-color: rgba(239,68,68,.45); }
-
-  .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 14px 0; }
-  .stat { background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; min-width: 0; }
-  .stat span { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
-  .stat b { font-size: 18px; font-variant-numeric: tabular-nums; }
-  .progress { height: 6px; background: var(--panel2); border-radius: 99px; overflow: hidden; margin-bottom: 14px; }
-  .progress > div { height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width .3s; }
-
-  .chart-wrap { position: relative; height: 230px; background: var(--code); border: 1px solid var(--border); border-radius: 10px; }
-  canvas { width: 100%; height: 100%; display: block; }
-  .legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin: 8px 2px 0; }
-  .legend i { display: inline-block; width: 12px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
-  .log { margin-top: 14px; height: 170px; overflow: auto; background: var(--code); border: 1px solid var(--border);
-    border-radius: 10px; padding: 10px 12px; font: 12px/1.55 var(--mono); color: #b9c0d4; white-space: pre-wrap; }
-
-  textarea.prompt { min-height: 84px; resize: vertical; }
-  .examples { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 12px; }
-  .examples button { padding: 5px 10px; font-size: 12px; font-weight: 500; background: var(--panel2); color: var(--muted);
-    border-color: var(--border); border-radius: 999px; }
-  .examples button:hover { color: var(--text); border-color: var(--accent); }
-  .controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }
-  .controls .val { color: var(--text); float: right; font-variant-numeric: tabular-nums; }
-
-  .codebox { margin-top: 14px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--code); }
-  .codebar { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 12px;
-    background: var(--panel2); border-bottom: 1px solid var(--border); font-size: 12px; color: var(--muted); flex-wrap: wrap; }
-  .codebar .dots i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; }
-  .codebar button { padding: 4px 10px; font-size: 12px; }
-  textarea.code { display: block; border: 0; border-radius: 0; min-height: 260px; background: var(--code); color: #d6e2ff;
-    font: 13px/1.6 var(--mono); resize: vertical; tab-size: 4; white-space: pre; }
-
-  .preview-bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
-  .seg { display: inline-flex; background: var(--panel2); border: 1px solid var(--border); border-radius: 9px; padding: 3px; }
-  .seg button { padding: 5px 12px; font-size: 12px; background: transparent; color: var(--muted); border-radius: 7px; }
-  .seg button.on { background: var(--accent); color: #fff; }
-  .preview-frame { width: 100%; height: 360px; border: 1px solid var(--border); border-radius: 10px; background: #ffffff; display: block; }
-  .preview-frame.dark { background: #0f1117; }
-  .preview-note { color: var(--muted); font-size: 12px; margin-top: 8px; }
-  .qc-banner { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 12px;
-    border: 1px solid var(--border); background: var(--panel2); margin-bottom: 14px; }
-  .qc-banner.ok { background: var(--ok-bg); border-color: rgba(34,197,94,.45); }
-  .qc-banner.err { background: var(--err-bg); border-color: rgba(239,68,68,.45); }
-  .qc-icon { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-size: 20px; font-weight: 800;
-    background: var(--border); color: var(--muted); flex: none; }
-  .ok .qc-icon { background: var(--ok); color: #05210f; }
-  .err .qc-icon { background: var(--err); color: #2a0606; }
-  .qc-title { font-weight: 700; font-size: 15px; }
-  .ok .qc-title { color: var(--ok); } .err .qc-title { color: var(--err); }
-  .qc-meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
-  .score { margin-left: auto; text-align: right; }
-  .score b { font-size: 24px; font-variant-numeric: tabular-nums; }
-  .checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-  .checks li { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 10px;
-    background: var(--panel2); border: 1px solid var(--border); border-left-width: 4px; }
-  .checks li.pass { border-left-color: var(--ok); }
-  .checks li.fail { border-left-color: var(--err); }
-  .checks li.warn { border-left-color: var(--warn); }
-  .checks .mark { font-weight: 800; width: 16px; flex: none; }
-  .pass .mark { color: var(--ok); } .fail .mark { color: var(--err); } .warn .mark { color: var(--warn); }
-  .checks .name { font-weight: 600; }
-  .checks .detail { color: var(--muted); font-size: 12px; margin-top: 2px; word-break: break-word; }
-  .empty { color: var(--muted); font-size: 13px; padding: 8px 2px; }
-  .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.35); border-top-color: #fff; border-radius: 50%;
-    display: inline-block; animation: spin .7s linear infinite; vertical-align: -2px; margin-right: 6px; }
+  .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+  .btn-danger { background: var(--surface); border-color: var(--border2); color: var(--err); }
+  .btn-danger:hover:not(:disabled) { background: var(--err-bg); }
+  .btn-ghost { background: var(--surface); border-color: var(--border2); color: var(--text); }
+  .btn-ghost:hover:not(:disabled) { background: var(--surface2); }
+  .spinner { width: 13px; height: 13px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%) translateY(20px); opacity: 0;
-    background: var(--panel2); border: 1px solid var(--border); padding: 10px 16px; border-radius: 10px;
-    transition: all .25s; z-index: 10; pointer-events: none; }
-  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-  @media (max-width: 1050px) { main { grid-template-columns: minmax(0, 1fr); } }
-  @media (max-width: 560px) {
-    header, main { padding-left: 14px; padding-right: 14px; }
-    .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 16px 0 12px; }
+  .stat { background: var(--surface2); border-radius: 10px; padding: 10px 12px; }
+  .stat span { display: block; font-size: 12px; color: var(--muted); }
+  .stat b { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .progress { height: 6px; border-radius: 99px; background: var(--surface2); overflow: hidden; }
+  .progress div { height: 100%; width: 0; background: var(--accent); border-radius: 99px; transition: width .4s; }
+  .chart-wrap { height: 260px; margin-top: 16px; }
+  canvas { width: 100%; height: 100%; display: block; }
+  .legend { display: flex; gap: 16px; font-size: 12.5px; color: var(--muted); margin: 8px 0 12px; }
+  .legend i { display: inline-block; width: 10px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+  details.logbox { border: 1px solid var(--border); border-radius: 10px; }
+  details.logbox summary { cursor: pointer; padding: 8px 12px; font-size: 12.5px; color: var(--muted); }
+  .log { font: 12px/1.6 var(--mono); background: var(--code-bg); padding: 10px 12px; height: 200px; overflow: auto; white-space: pre-wrap;
+    border-top: 1px solid var(--border); border-radius: 0 0 10px 10px; color: var(--muted); }
+
+  .prompt { min-height: 84px; resize: vertical; }
+  .examples { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 14px; }
+  .examples button { background: var(--surface2); border: 1px solid var(--border); padding: 4px 10px; border-radius: 99px; font-size: 12.5px; font-weight: 400; color: var(--muted); }
+  .examples button:hover { color: var(--text); border-color: var(--border2); }
+  .controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 14px; }
+  .codebox { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-top: 16px; }
+  .codebar { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 8px 6px 12px; border-bottom: 1px solid var(--border); font-size: 12.5px; color: var(--muted); }
+  .codebar .btn-ghost { padding: 4px 10px; font-size: 12.5px; }
+  textarea.code { border: 0; border-radius: 0; min-height: 260px; resize: vertical; font: 12.5px/1.6 var(--mono); background: var(--code-bg); box-shadow: none; }
+
+  .preview-bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+  .seg { display: inline-flex; padding: 3px; background: var(--surface2); border-radius: 9px; gap: 2px; }
+  .seg button { padding: 4px 10px; font-size: 12.5px; color: var(--muted); background: transparent; border-radius: 7px; }
+  .seg button.on { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .preview-frame { width: 100%; height: 380px; border: 1px solid var(--border); border-radius: 10px; background: #fff; display: block; transition: width .2s; }
+  .preview-frame.dark { background: #16171b; }
+  .preview-note { font-size: 12.5px; color: var(--faint); margin-top: 8px; }
+
+  .qc-banner { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; background: var(--surface2); border: 1px solid var(--border); }
+  .qc-banner.ok { background: var(--ok-bg); border-color: transparent; color: var(--ok); }
+  .qc-banner.err { background: var(--err-bg); border-color: transparent; color: var(--err); }
+  .qc-icon { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; background: var(--surface); flex: none; }
+  .qc-title { font-weight: 600; }
+  .qc-meta { font-size: 12.5px; opacity: .85; }
+  .score { margin-left: auto; text-align: right; }
+  .score b { font-size: 20px; }
+  ul.checks { list-style: none; padding: 0; margin: 12px 0 0; display: flex; flex-direction: column; gap: 6px; }
+  ul.checks li { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 9px; background: var(--surface2); }
+  ul.checks li .mark { width: 20px; flex: none; text-align: center; font-weight: 700; }
+  ul.checks li.pass .mark { color: var(--ok); } ul.checks li.fail .mark { color: var(--err); } ul.checks li.warn .mark { color: var(--warn); }
+  ul.checks li.fail { background: var(--err-bg); } ul.checks li.warn { background: var(--warn-bg); }
+  ul.checks li.empty { color: var(--faint); }
+  ul.checks .name { font-weight: 500; overflow-wrap: anywhere; } ul.checks .detail { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 9px 16px;
+    border-radius: 10px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 50; max-width: 90vw; }
+  .toast.show { opacity: 1; }
+
+  @media (max-width: 1100px) { .grid2 { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 760px) {
+    body { grid-template-columns: minmax(0, 1fr); }
+    aside { position: sticky; height: auto; flex-direction: row; align-items: center; overflow-x: auto; padding: 8px 12px; z-index: 20;
+      border-right: 0; border-bottom: 1px solid var(--border); gap: 2px; }
+    .brand { padding: 0 8px 0 0; font-size: 17px; } .brand small, .nav-label, .side-foot .status-card { display: none; }
+    aside a.nav { padding: 6px 9px; white-space: nowrap; } aside a.nav span { display: none; }
+    .side-foot { margin: 0 0 0 auto; flex-direction: row; }
+    .content { padding: 18px 16px 48px; }
+    .kpis, .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .controls { grid-template-columns: minmax(0, 1fr); }
   }
 </style>
 </head>
 <body>
-<header>
-  <div class="brand">
-    <div class="logo">E</div>
-    <div><h1>Elalem</h1><small>Sıfırdan PyTorch karakter seviyesi GPT</small></div>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="logo" viewBox="0 0 32 32"><rect x="1" y="1" width="30" height="30" rx="9" fill="currentColor"/><path d="M10 11l-4 5 4 5M22 11l4 5-4 5M18 9l-4 14" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+</svg>
+<aside>
+  <div class="brand"><svg><use href="#logo"/></svg><div>Elalem<small>Model paneli</small></div></div>
+  <div class="nav-label">Model</div>
+  <a class="nav on" href="#egitim"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 17l6-6 4 4 8-8M15 7h6v6"/></svg><span>Eğitim</span></a>
+  <a class="nav" href="#veri"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg><span>Veri</span></a>
+  <div class="nav-label">Test</div>
+  <a class="nav" href="#playground"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 9l-4 3 4 3M16 9l4 3-4 3M14 5l-4 14"/></svg><span>Playground</span></a>
+  <a class="nav" href="#kalite"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg><span>Kalite kontrolü</span></a>
+  <div class="side-foot">
+    <div class="status-card"><div class="row1"><span class="dot" id="liveDot"></span><span id="statusText">Hazır</span></div><div class="row2">Cihaz: <span id="device">-</span></div></div>
+    <a class="nav" href="/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg><span>Stüdyoya dön</span></a>
   </div>
-  <div class="chips">
-    <a class="chip" href="/" style="text-decoration:none;color:inherit">← <b>Stüdyo</b></a>
-    <span class="chip"><span class="dot" id="liveDot"></span><b id="statusText">Hazır</b></span>
-    <span class="chip">Cihaz <b id="device">-</b></span>
-    <span class="chip">Parametre <b id="params">-</b></span>
-    <span class="chip">Sözlük <b id="vocab">-</b></span>
-    <span class="chip">Veri <b id="tokens">-</b></span>
+</aside>
+
+<div class="content">
+  <div class="page-head">
+    <div><h1>Model paneli</h1><p>Sıfırdan PyTorch ile yazılmış karakter seviyesi GPT: eğit, veri ekle, dene ve denetle.</p></div>
   </div>
-</header>
-
-<main>
-  <div class="col">
-    <section class="panel">
-      <h2>🧠 Elalem LLM Eğitim Paneli</h2>
-      <p class="sub">AdamW + CrossEntropyLoss ile gömülü Full-Stack veri seti üzerinde eğitim.</p>
-      <div class="row">
-        <div class="field"><label for="steps">Adım sayısı</label><input id="steps" type="number" min="1" max="100000" value="1500"></div>
-        <div class="field"><label for="lr">Öğrenme oranı</label><input id="lr" type="number" step="0.0001" min="0.00001" value="0.003"></div>
-        <button class="btn-primary" id="trainBtn">▶ Eğitimi Başlat</button>
-        <button class="btn-danger" id="stopBtn" disabled>■ Durdur</button>
-      </div>
-      <div class="stats">
-        <div class="stat"><span>Adım</span><b id="stStep">0</b></div>
-        <div class="stat"><span>Eğitim loss</span><b id="stLoss">-</b></div>
-        <div class="stat"><span>Doğrulama loss</span><b id="stVal">-</b></div>
-        <div class="stat"><span>ms / adım</span><b id="stMs">-</b></div>
-      </div>
-      <div class="progress"><div id="prog"></div></div>
-      <div class="chart-wrap"><canvas id="chart"></canvas></div>
-      <div class="legend"><span><i style="background:#6c8cff"></i>Train loss (adım)</span><span><i style="background:#f5b041"></i>Val loss (değerlendirme)</span></div>
-      <div class="log" id="log"></div>
-    </section>
-
-    <section class="panel">
-      <h2>📚 Eğitim Verisi</h2>
-      <p class="sub">Gömülü veriye ek olarak <code id="veriKlasor">veri/</code> klasöründeki .html/.css/.js/.py/.txt/.md dosyaları da eğitime katılır.</p>
-      <div class="stats" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-top:0">
-        <div class="stat"><span>Dış dosya</span><b id="dvDosya">0</b></div>
-        <div class="stat"><span>Dış karakter</span><b id="dvKarakter">0</b></div>
-        <div class="stat"><span>Toplam token</span><b id="dvToken">-</b></div>
-      </div>
-      <div class="field" style="margin-bottom:10px"><label for="urlIn">Web sayfasından kod örneklerini indir</label>
-        <input id="urlIn" type="text" placeholder="https://developer.mozilla.org/en-US/docs/Web/HTML/Element/div"></div>
-      <div class="row" style="margin-bottom:6px">
-        <div class="field"><label for="maxSayfa">En fazla sayfa (aynı klasördeki linkler gezilir)</label><input id="maxSayfa" type="number" min="1" max="300" value="1"></div>
-        <button class="btn-primary" id="urlBtn">⬇ İndir</button>
-        <button class="btn-danger" id="urlStop" disabled>■ Durdur</button>
-      </div>
-      <div class="preview-note" id="webDurum">Sayfadaki &lt;pre&gt;/&lt;code&gt; kod blokları çıkarılır, robots.txt kurallarına uyulur.</div>
-      <div class="field" style="margin-top:14px"><label for="metinIn">Ya da kendi kodunu / metnini yapıştır</label>
-        <textarea id="metinIn" rows="4" style="font:12px/1.5 var(--mono)" placeholder="<div class=&quot;kart&quot;>...</div>"></textarea></div>
-      <div class="row" style="margin-top:8px">
-        <div class="field"><input id="metinAd" type="text" placeholder="Dosya adı (isteğe bağlı)"></div>
-        <button class="btn-ghost" id="metinBtn">＋ Veriye Ekle</button>
-        <button class="btn-ghost" id="reloadBtn" title="veri/ klasörüne elle dosya koyduysan">↻ Veriyi Yenile</button>
-      </div>
-      <ul class="checks" id="kaynakList" style="margin-top:14px;max-height:220px;overflow:auto"></ul>
-    </section>
+  <div class="kpis">
+    <div class="kpi"><span>Parametre</span><b id="params">-</b></div>
+    <div class="kpi"><span>Sözlük</span><b id="vocab">-</b></div>
+    <div class="kpi"><span>Veri (token)</span><b id="tokens">-</b></div>
+    <div class="kpi"><span>Doğrulama loss</span><b id="kpiVal">-</b></div>
   </div>
 
-  <div class="col">
-    <section class="panel">
-      <h2>⚡ Prompt / Kod Üretim Alanı</h2>
-      <p class="sub">Elalem'e bir istek yaz; model cevabı karakter karakter sıfırdan üretir.</p>
+  <section class="panel" id="egitim">
+    <h2>Eğitim</h2>
+    <p class="sub">AdamW ve çapraz entropi kaybıyla gömülü veri ve veri/ klasörü üzerinde eğitim. Ağırlıklar her 250 adımda kaydedilir.</p>
+    <div class="row">
+      <div class="field"><label for="steps">Adım sayısı</label><input id="steps" type="number" min="1" max="100000" value="1500"></div>
+      <div class="field"><label for="lr">Öğrenme oranı</label><input id="lr" type="number" step="0.0001" min="0.00001" value="0.003"></div>
+      <button class="btn-primary" id="trainBtn">Eğitimi başlat</button>
+      <button class="btn-danger" id="stopBtn" disabled>Durdur</button>
+    </div>
+    <div class="stats">
+      <div class="stat"><span>Adım</span><b id="stStep">0</b></div>
+      <div class="stat"><span>Eğitim loss</span><b id="stLoss">-</b></div>
+      <div class="stat"><span>Doğrulama loss</span><b id="stVal">-</b></div>
+      <div class="stat"><span>ms / adım</span><b id="stMs">-</b></div>
+    </div>
+    <div class="progress"><div id="prog"></div></div>
+    <div class="chart-wrap"><canvas id="chart"></canvas></div>
+    <div class="legend"><span><i style="background:var(--chart-train)"></i>Eğitim loss</span><span><i style="background:var(--chart-val)"></i>Doğrulama loss</span></div>
+    <details class="logbox" open><summary>Günlük</summary><div class="log" id="log"></div></details>
+  </section>
+
+  <section class="panel" id="veri">
+    <h2>Eğitim verisi</h2>
+    <p class="sub">Gömülü veriye ek olarak <code id="veriKlasor">veri/</code> klasöründeki .html, .css, .js, .py, .txt ve .md dosyaları eğitime katılır.</p>
+    <div class="stats" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-top:0">
+      <div class="stat"><span>Dış dosya</span><b id="dvDosya">0</b></div>
+      <div class="stat"><span>Dış karakter</span><b id="dvKarakter">0</b></div>
+      <div class="stat"><span>Toplam token</span><b id="dvToken">-</b></div>
+    </div>
+    <div class="grid2">
+      <div>
+        <div class="field" style="margin-bottom:10px"><label for="urlIn">Web sayfasından kod örneklerini indir</label>
+          <input id="urlIn" type="text" placeholder="https://developer.mozilla.org/en-US/docs/Web/HTML/Element/div"></div>
+        <div class="row" style="margin-bottom:6px">
+          <div class="field"><label for="maxSayfa">En fazla sayfa</label><input id="maxSayfa" type="number" min="1" max="300" value="1"></div>
+          <button class="btn-primary" id="urlBtn">İndir</button>
+          <button class="btn-danger" id="urlStop" disabled>Durdur</button>
+        </div>
+        <div class="preview-note" id="webDurum">Sayfadaki kod blokları çıkarılır, robots.txt kurallarına uyulur.</div>
+        <div class="field" style="margin-top:16px"><label for="metinIn">Ya da kendi kodunu veya metnini yapıştır</label>
+          <textarea id="metinIn" rows="4" style="font:12px/1.5 var(--mono)" placeholder="Eğitime eklenecek kod veya metin"></textarea></div>
+        <div class="row" style="margin-top:8px">
+          <div class="field"><input id="metinAd" type="text" placeholder="Dosya adı (isteğe bağlı)"></div>
+          <button class="btn-ghost" id="metinBtn">Veriye ekle</button>
+          <button class="btn-ghost" id="reloadBtn" title="veri/ klasörüne elle dosya koyduysan">Veriyi yenile</button>
+        </div>
+      </div>
+      <div><div class="field"><label>Kaynaklar (en büyük 40)</label></div>
+        <ul class="checks" id="kaynakList" style="margin-top:6px;max-height:300px;overflow:auto"></ul></div>
+    </div>
+  </section>
+
+  <div class="grid2">
+    <section class="panel" id="playground">
+      <h2>Playground</h2>
+      <p class="sub">Bir istek yaz; model cevabı karakter karakter sıfırdan üretir.</p>
       <textarea class="prompt" id="prompt" placeholder="Örn: Bir giriş formu yap.">Bir giriş formu yap.</textarea>
       <div class="examples" id="examples"></div>
       <div class="controls">
@@ -1719,42 +1755,41 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
         <div class="field"><label>Maks. karakter <span class="val" id="maxV">400</span></label><input id="maxTok" type="range" min="20" max="1200" step="10" value="400"></div>
         <div class="field"><label>Top-k <span class="val" id="topkV">10</span></label><input id="topk" type="range" min="1" max="60" step="1" value="10"></div>
       </div>
-      <button class="btn-primary" id="genBtn" style="width:100%">✨ Kod Üret</button>
+      <button class="btn-primary" id="genBtn" style="width:100%">Kod üret</button>
       <div class="codebox">
-        <div class="codebar">
-          <span class="dots"><i style="background:#ef4444"></i><i style="background:#f5b041"></i><i style="background:#22c55e"></i>
-            <span id="outMeta">Çıktı bekleniyor</span></span>
-          <span><button class="btn-ghost" id="recheckBtn" title="Çıktıyı düzenleyip yeniden doğrulayabilirsin">↻ Yeniden Doğrula</button>
-            <button class="btn-ghost" id="copyBtn">Kopyala</button></span>
+        <div class="codebar"><span id="outMeta">Çıktı bekleniyor</span>
+          <span><button class="btn-ghost" id="recheckBtn" title="Çıktıyı düzenleyip yeniden doğrulayabilirsin">Yeniden doğrula</button>
+            <button class="btn-ghost" id="copyBtn">Kopyala</button></span></div>
+        <textarea class="code" id="output" spellcheck="false" placeholder="Üretilen kod burada görünecek..."></textarea>
+      </div>
+    </section>
+
+    <div>
+      <section class="panel">
+        <h2>Canlı önizleme</h2>
+        <p class="sub">HTML, CSS ve JS çıktısı burada çalışır. Kodu düzenlersen önizleme anında güncellenir.</p>
+        <div class="preview-bar">
+          <span class="seg"><button id="bgLight" class="on">Açık</button><button id="bgDark">Koyu</button></span>
+          <span class="seg"><button data-w="100%" class="on">Masaüstü</button><button data-w="420px">Mobil</button></span>
+          <button class="btn-ghost" id="popBtn" style="padding:5px 10px;font-size:12.5px">Yeni sekmede aç</button>
         </div>
-        <textarea class="code" id="output" spellcheck="false" placeholder="Elalem'in ürettiği HTML / CSS / Backend kodu burada görünecek..."></textarea>
-      </div>
-    </section>
+        <iframe class="preview-frame" id="preview" sandbox="allow-scripts allow-forms allow-modals" title="Önizleme"></iframe>
+        <div class="preview-note" id="previewNote">Kod ürettiğinde önizleme burada belirecek.</div>
+      </section>
 
-    <section class="panel">
-      <h2>👁️ Canlı Önizleme</h2>
-      <p class="sub">Üretilen HTML / CSS / JS kodu burada çalışır halde görünür. Kodu düzenlersen önizleme anında güncellenir.</p>
-      <div class="preview-bar">
-        <span class="seg"><button id="bgLight" class="on">Açık zemin</button><button id="bgDark">Koyu zemin</button></span>
-        <span class="seg"><button data-w="100%" class="on">Masaüstü</button><button data-w="420px">Mobil</button></span>
-        <button class="btn-ghost" id="popBtn">↗ Yeni sekmede aç</button>
-      </div>
-      <iframe class="preview-frame" id="preview" sandbox="allow-scripts allow-forms allow-modals" title="Önizleme"></iframe>
-      <div class="preview-note" id="previewNote">Kod ürettiğinde önizleme burada belirecek.</div>
-    </section>
-
-    <section class="panel">
-      <h2>🛡️ QA/QC Raporu</h2>
-      <p class="sub">Kural tabanlı doğrulayıcı: HTML etiket yığını, CSS bildirimleri, Python ast.parse, parantez/tırnak dengesi.</p>
-      <div class="qc-banner" id="qcBanner">
-        <div class="qc-icon" id="qcIcon">?</div>
-        <div><div class="qc-title" id="qcTitle">Henüz kontrol yapılmadı</div><div class="qc-meta" id="qcMeta">Kod ürettiğinde rapor otomatik oluşur.</div></div>
-        <div class="score"><div class="qc-meta">Skor</div><b id="qcScore">-</b></div>
-      </div>
-      <ul class="checks" id="qcList"><li class="empty" style="border:0;background:none">Kontrol listesi boş.</li></ul>
-    </section>
+      <section class="panel" id="kalite">
+        <h2>Kalite kontrolü</h2>
+        <p class="sub">Kural tabanlı doğrulayıcı: HTML etiket yığını, CSS bildirimleri, Python ast.parse, parantez ve tırnak dengesi.</p>
+        <div class="qc-banner" id="qcBanner">
+          <div class="qc-icon" id="qcIcon">?</div>
+          <div><div class="qc-title" id="qcTitle">Henüz kontrol yapılmadı</div><div class="qc-meta" id="qcMeta">Kod ürettiğinde rapor otomatik oluşur.</div></div>
+          <div class="score"><div class="qc-meta">Skor</div><b id="qcScore">-</b></div>
+        </div>
+        <ul class="checks" id="qcList"><li class="empty">Kontrol listesi boş.</li></ul>
+      </section>
+    </div>
   </div>
-</main>
+</div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -1784,7 +1819,8 @@ function drawChart(s) {
   ctx.clearRect(0, 0, W, H);
   const pad = { l: 46, r: 14, t: 14, b: 26 };
   const tr = s ? s.loss : [], va = s ? s.val : [];
-  ctx.font = "11px system-ui, sans-serif"; ctx.fillStyle = "#8a91a5";
+  const css = getComputedStyle(document.documentElement), renk = n => css.getPropertyValue(n).trim();
+  ctx.font = "11px system-ui, sans-serif"; ctx.fillStyle = renk("--faint");
   if (!tr.length) { ctx.textAlign = "center"; ctx.fillText("Eğitim başladığında loss grafiği burada çizilecek", W / 2, H / 2); return; }
   const xs = tr.map(p => p[0]).concat(va.map(p => p[0]));
   const ys = tr.map(p => p[1]).concat(va.map(p => p[2]));
@@ -1792,7 +1828,7 @@ function drawChart(s) {
   let y0 = Math.max(0, Math.min(...ys) * 0.95), y1 = Math.max(...ys) * 1.05; if (y1 - y0 < 1e-6) y1 = y0 + 1;
   const X = v => pad.l + (v - x0) / (x1 - x0) * (W - pad.l - pad.r);
   const Y = v => pad.t + (1 - (v - y0) / (y1 - y0)) * (H - pad.t - pad.b);
-  ctx.strokeStyle = "#1d2230"; ctx.lineWidth = 1; ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  ctx.strokeStyle = renk("--chart-grid"); ctx.lineWidth = 1; ctx.textAlign = "right"; ctx.textBaseline = "middle";
   for (let i = 0; i <= 4; i++) {
     const v = y0 + (y1 - y0) * i / 4, y = Y(v);
     ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
@@ -1806,10 +1842,10 @@ function drawChart(s) {
     pts.forEach((p, i) => i ? ctx.lineTo(X(p[0]), Y(p[1])) : ctx.moveTo(X(p[0]), Y(p[1])));
     ctx.stroke();
   };
-  line(tr, "#6c8cff", 1.6);
+  line(tr, renk("--chart-train"), 1.6);
   const vp = va.map(p => [p[0], p[2]]);
-  line(vp, "#f5b041", 2);
-  ctx.fillStyle = "#f5b041";
+  line(vp, renk("--chart-val"), 2);
+  ctx.fillStyle = renk("--chart-val");
   vp.forEach(p => { ctx.beginPath(); ctx.arc(X(p[0]), Y(p[1]), 2.8, 0, Math.PI * 2); ctx.fill(); });
 }
 
@@ -1820,6 +1856,7 @@ async function refresh() {
     lastState = s;
     if (!window._lrAyarli) { $("lr").value = s.config.learning_rate; window._lrAyarli = true; }
     $("device").textContent = s.cihaz.toUpperCase();
+    $("kpiVal").textContent = fmt(s.son_val);
     $("params").textContent = (s.parametre / 1e6).toFixed(2) + "M";
     $("vocab").textContent = s.sozluk;
     $("tokens").textContent = s.veri_token.toLocaleString("tr-TR");
@@ -1830,7 +1867,7 @@ async function refresh() {
     $("statusText").textContent = s.egitimde ? "Eğitiliyor" : (s.adim ? "Eğitildi" : "Hazır");
     $("liveDot").className = "dot" + (s.egitimde ? " live" : "");
     $("trainBtn").disabled = s.egitimde; $("stopBtn").disabled = !s.egitimde;
-    $("trainBtn").innerHTML = s.egitimde ? '<span class="spinner"></span>Eğitiliyor...' : "▶ Eğitimi Başlat";
+    $("trainBtn").innerHTML = s.egitimde ? '<span class="spinner"></span>Eğitiliyor' : "Eğitimi başlat";
     const start = s.hedef_adim ? Math.max(0, s.hedef_adim - Number($("steps").value)) : 0;
     const pct = s.egitimde && s.hedef_adim > start ? (s.adim - start) / (s.hedef_adim - start) * 100 : (s.adim ? 100 : 0);
     $("prog").style.width = Math.min(100, Math.max(0, pct)) + "%";
@@ -1845,6 +1882,12 @@ async function refresh() {
   } catch (e) { $("statusText").textContent = "Bağlantı yok"; }
 }
 setInterval(refresh, 1000); refresh();
+// kenar çubuğunda o an görünen bölümü işaretle
+const navlar = [...document.querySelectorAll("aside a.nav[href^='#']")];
+const gozcu = new IntersectionObserver(girdiler => girdiler.forEach(g => {
+  if (g.isIntersecting) navlar.forEach(a => a.classList.toggle("on", a.getAttribute("href") === "#" + g.target.id));
+}), { rootMargin: "-30% 0px -60% 0px" });
+navlar.forEach(a => { const hedef = document.querySelector(a.getAttribute("href")); if (hedef) gozcu.observe(hedef); });
 window.addEventListener("resize", () => drawChart(lastState));
 
 // ------------------------------------------------------------ veri
@@ -1856,11 +1899,11 @@ function renderVeri(s) {
   $("dvToken").textContent = s.veri_token.toLocaleString("tr-TR");
   const w = v.web;
   $("urlBtn").disabled = w.calisiyor; $("urlStop").disabled = !w.calisiyor;
-  $("urlBtn").innerHTML = w.calisiyor ? '<span class="spinner"></span>İndiriliyor...' : "⬇ İndir";
+  $("urlBtn").innerHTML = w.calisiyor ? '<span class="spinner"></span>İndiriliyor' : "İndir";
   if (w.calisiyor) $("webDurum").textContent = `${w.kaydedilen}/${w.hedef} sayfa kaydedildi · ${w.son_url}`;
-  const html = v.kaynaklar.map(k => `<li class="pass"><span class="mark">📄</span><div><div class="name">${esc(k.ad)}</div>
+  const html = v.kaynaklar.map(k => `<li><span class="mark" style="color:var(--faint)">•</span><div><div class="name">${esc(k.ad)}</div>
     <div class="detail">${k.karakter.toLocaleString("tr-TR")} karakter</div></div></li>`).join("");
-  const box = $("kaynakList"), yeni = html || '<li class="empty" style="border:0;background:none">Henüz dış veri yok.</li>';
+  const box = $("kaynakList"), yeni = html || '<li class="empty">Henüz dış veri yok.</li>';
   if (box._last !== yeni) { box.innerHTML = yeni; box._last = yeni; }
 }
 $("urlBtn").onclick = async () => {
@@ -1895,7 +1938,7 @@ ORNEKLER.forEach(o => { const b = document.createElement("button"); b.textConten
 $("genBtn").onclick = async () => {
   const prompt = $("prompt").value.trim();
   if (!prompt) { toast("Lütfen bir prompt yaz."); return; }
-  const btn = $("genBtn"); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Üretiliyor...';
+  const btn = $("genBtn"); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Üretiliyor';
   try {
     const r = await api("/api/generate", { prompt, temperature: Number($("temp").value),
       max_new_tokens: Number($("maxTok").value), top_k: Number($("topk").value) });
@@ -1904,7 +1947,7 @@ $("genBtn").onclick = async () => {
     renderQC(r.qc);
     renderPreview(r.cikti, r.qc.dil);
   } catch (e) { toast("Hata: " + e.message); }
-  finally { btn.disabled = false; btn.innerHTML = "✨ Kod Üret"; }
+  finally { btn.disabled = false; btn.innerHTML = "Kod üret"; }
 };
 $("recheckBtn").onclick = async () => {
   try { const r = await api("/api/qc", { code: $("output").value }); renderQC(r); renderPreview($("output").value, r.dil); toast("QA/QC yeniden çalıştırıldı"); }
@@ -1989,7 +2032,7 @@ function renderQC(q) {
   const ok = q.gecti;
   $("qcBanner").className = "qc-banner " + (ok ? "ok" : "err");
   $("qcIcon").textContent = ok ? "✓" : "✗";
-  $("qcTitle").textContent = ok ? "QC GEÇTİ: Kod geçerli görünüyor" : "QC BAŞARISIZ: Kodda hata bulundu";
+  $("qcTitle").textContent = ok ? "Kalite kontrolü geçti" : "Kodda sorun bulundu";
   const fail = q.kontroller.filter(k => !k.durum).length;
   $("qcMeta").textContent = `Dil: ${q.dil.toUpperCase()} · ${q.kontroller.length} kontrol · ${fail} hata · ${q.uyarilar.length} uyarı`;
   $("qcScore").textContent = q.skor + "/100";
@@ -2164,7 +2207,7 @@ STUDIO_HTML = r"""<!DOCTYPE html>
     <span class="pill hide-sm" id="modelPill"><span class="dot" id="dot"></span><span id="modelText">Model yükleniyor</span></span>
     <button class="ghost" id="newChat" title="Yeni sohbet">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span class="hide-sm">Yeni</span></button>
-    <a class="ghost" href="/backend" title="Eğitim paneli">
+    <a class="ghost" href="/backend" title="Eğitim paneli" id="panelLink">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Panel</a>
   </div>
 </div>
@@ -2399,6 +2442,7 @@ async function durumYenile() {
   try {
     const s = await api("/api/status");
     const p = s.parametre >= 1e6 ? (s.parametre / 1e6).toFixed(1) + "M" : Math.round(s.parametre / 1e3) + "K";
+    if (s.uzak) $("panelLink").style.display = "none";
     $("dot").classList.toggle("busy", !!s.egitimde);
     $("modelText").textContent = s.egitimde ? "Eğitiliyor · adım " + s.adim : "Elalem " + p + " · " + s.cihaz;
   } catch (e) {
@@ -2442,8 +2486,33 @@ def handler_olustur(motor):
             ham = self.rfile.read(n) if n else b"{}"
             return json.loads(ham.decode("utf-8") or "{}")
 
+        # Tünel (cloudflared, ngrok vb.) üzerinden gelen ziyaretçi yalnızca stüdyoyu kullanabilir;
+        # panel, eğitim ve veri uçları sadece bu bilgisayardan (localhost) açılır.
+        UZAK_SERBEST = {("GET", "/"), ("GET", "/index.html"), ("GET", "/favicon.ico"), ("GET", "/api/status"),
+                        ("POST", "/api/generate"), ("POST", "/api/qc")}
+
+        def _uzaktan(self):
+            if any(self.headers.get(h) for h in ("Cf-Connecting-Ip", "X-Forwarded-For", "Forwarded", "X-Real-Ip")):
+                return True
+            if self.client_address[0] not in ("127.0.0.1", "::1"):
+                return True
+            sunucu = (self.headers.get("Host") or "").rsplit(":", 1)[0].strip("[]").lower()
+            return sunucu not in ("127.0.0.1", "localhost", "::1", "")
+
+        def _izinli(self, yontem, yol):
+            if not self._uzaktan() or (yontem, yol) in self.UZAK_SERBEST:
+                return True
+            self._json(403, {"hata": "Bu sayfa yalnızca Elalem'in çalıştığı bilgisayardan açılabilir."})
+            return False
+
         def do_GET(self):
             yol = self.path.split("?", 1)[0]
+            if not self._izinli("GET", yol):
+                return
+            if yol == "/api/status" and self._uzaktan():
+                d = motor.durum()
+                self._json(200, dict({k: d[k] for k in ("cihaz", "parametre", "egitimde", "adim")}, uzak=True))
+                return
             if yol in ("/", "/index.html"):
                 self._gonder(200, STUDIO_HTML, "text/html; charset=utf-8")
             elif yol in ("/backend", "/backend/"):
@@ -2457,6 +2526,8 @@ def handler_olustur(motor):
 
         def do_POST(self):
             yol = self.path.split("?", 1)[0]
+            if not self._izinli("POST", yol):
+                return
             try:
                 veri = self._govde_oku()
             except Exception as e:
