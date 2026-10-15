@@ -39,6 +39,10 @@ import re
 import sys
 import threading
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
+import urllib.robotparser
 import webbrowser
 from collections import deque
 from html.parser import HTMLParser
@@ -83,6 +87,13 @@ CONFIG = {
     "eval_interval": 50,    # kaç adımda bir doğrulama kaybı hesaplanır
     "eval_iters": 10,       # doğrulama kaybı için kaç batch ortalaması alınır
     "seed": 1337,
+}
+
+# Daha fazla veri = daha büyük model. '--boyut' ile seçilir (CPU'da 'kucuk', Apple M serisinde 'orta').
+BOYUTLAR = {
+    "kucuk": {"n_embd": 192, "n_head": 6, "n_layer": 4, "block_size": 128, "batch_size": 32, "learning_rate": 3e-3},
+    "orta":  {"n_embd": 256, "n_head": 8, "n_layer": 6, "block_size": 256, "batch_size": 32, "learning_rate": 1e-3},
+    "buyuk": {"n_embd": 384, "n_head": 6, "n_layer": 8, "block_size": 256, "batch_size": 48, "learning_rate": 6e-4},
 }
 
 
@@ -451,6 +462,152 @@ FULLSTACK_DATA = egitim_verisi_olustur()
 
 
 # =============================================================================
+# 1b. DIŞ VERİ YÜKLEYİCİ (veri/ klasörü, URL'den çekme, elle ekleme)
+# =============================================================================
+# main.py'nin yanındaki 'veri/' klasörüne koyduğun tüm .html/.css/.js/.py/.txt/.md
+# dosyaları eğitim verisine eklenir. Panelden URL girerek web sayfalarındaki kod
+# örneklerini de bu klasöre indirebilirsin.
+
+VERI_DIR = os.path.join(SCRIPT_DIR, "veri")
+VERI_UZANTILAR = {".html", ".htm", ".css", ".scss", ".js", ".jsx", ".ts", ".tsx", ".vue",
+                  ".py", ".txt", ".md", ".json"}
+ATLANAN_KLASORLER = {"node_modules", "__pycache__", "venv", ".venv", "dist", "build", ".git"}
+MAX_DIS_VERI = 30_000_000        # en fazla ~30 milyon karakter dış veri
+MAX_SAYFA_BAYT = 3_000_000       # tek bir web sayfası için indirme sınırı
+TARAYICI_KIMLIGI = "ElalemBot/1.0 (+local educational crawler)"
+
+
+def dis_veri_oku(klasor=VERI_DIR):
+    """veri/ klasöründeki metin dosyalarını okur. Dönüş: (metin, [{'ad', 'karakter'}])"""
+    parcalar, kaynaklar, toplam = [], [], 0
+    if not os.path.isdir(klasor):
+        return "", kaynaklar
+    for kok, klasorler, dosyalar in os.walk(klasor):
+        klasorler[:] = sorted(d for d in klasorler if not d.startswith(".") and d not in ATLANAN_KLASORLER)
+        for ad in sorted(dosyalar):
+            if os.path.splitext(ad)[1].lower() not in VERI_UZANTILAR:
+                continue
+            yol = os.path.join(kok, ad)
+            try:
+                with open(yol, "r", encoding="utf-8", errors="ignore") as f:
+                    metin = f.read().replace("\r\n", "\n").replace("\r", "\n").strip()
+            except OSError:
+                continue
+            if not metin:
+                continue
+            if toplam + len(metin) > MAX_DIS_VERI:
+                metin = metin[:MAX_DIS_VERI - toplam]
+            parcalar.append(metin)
+            kaynaklar.append({"ad": os.path.relpath(yol, klasor), "karakter": len(metin)})
+            toplam += len(metin)
+            if toplam >= MAX_DIS_VERI:
+                return "\n\n".join(parcalar), kaynaklar
+    return "\n\n".join(parcalar), kaynaklar
+
+
+class _KodBlokCikarici(HTMLParser):
+    """
+    Bir web sayfasından kod örneklerini çıkarır: <pre>, <code>, <textarea> ve
+    class'ında 'code' / 'w3-code' / 'highlight' geçen öğeler.
+    Kod bloğu yoksa sayfadaki görünür metni toplar. Ayrıca bağlantıları listeler.
+    """
+    KOD_ETIKETLERI = {"pre", "code", "textarea"}
+    GIZLI_ETIKETLER = {"script", "style", "noscript", "svg", "head"}
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.stack = []
+        self.bloklar = []
+        self.metin = []
+        self.linkler = []
+        self._buf = None
+        self._kok = None
+        self._gizli = 0
+
+    def _kod_mu(self, tag, attrs):
+        if tag in self.KOD_ETIKETLERI:
+            return True
+        cls = (dict(attrs).get("class") or "").lower()
+        return bool(re.search(r"(^|[\s_-])(w3-code|code|highlight|codehilite|sourcecode)($|[\s_-])", cls))
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "a":
+            href = dict(attrs).get("href")
+            if href:
+                self.linkler.append(href)
+        if tag == "br":
+            if self._buf is not None:
+                self._buf.append("\n")
+            return
+        if tag in VOID_ETIKETLER:
+            return
+        if self._buf is None and self._kod_mu(tag, attrs):
+            self._buf, self._kok = [], len(self.stack)
+        if tag in self.GIZLI_ETIKETLER:
+            self._gizli += 1
+        self.stack.append(tag)
+
+    def handle_endtag(self, tag):
+        if tag in VOID_ETIKETLER or tag not in self.stack:
+            return
+        while self.stack:
+            t = self.stack.pop()
+            if t in self.GIZLI_ETIKETLER:
+                self._gizli = max(0, self._gizli - 1)
+            if self._buf is not None and len(self.stack) == self._kok:
+                blok = "".join(self._buf).strip("\n")
+                if len(blok.strip()) >= 20:
+                    self.bloklar.append(blok)
+                self._buf, self._kok = None, None
+            if t == tag:
+                break
+
+    def handle_data(self, data):
+        if self._buf is not None:
+            self._buf.append(data)
+        elif not self._gizli and data.strip():
+            self.metin.append(" ".join(data.split()))
+
+
+def sayfa_indir(url):
+    """URL'yi indirir. Dönüş: (içerik_metni, content_type)"""
+    istek = urllib.request.Request(url, headers={"User-Agent": TARAYICI_KIMLIGI})
+    with urllib.request.urlopen(istek, timeout=20) as yanit:
+        tip = yanit.headers.get("Content-Type", "")
+        ham = yanit.read(MAX_SAYFA_BAYT + 1)[:MAX_SAYFA_BAYT]
+        charset = yanit.headers.get_content_charset() or "utf-8"
+    return ham.decode(charset, errors="ignore"), tip
+
+
+def sayfadan_veri_cikar(icerik, tip, url):
+    """HTML ise kod bloklarını (yoksa görünür metni) çıkarır; CSS/JS/düz metinse olduğu gibi döndürür."""
+    yol = urllib.parse.urlparse(url).path.lower()
+    if "html" not in tip and not yol.endswith((".html", ".htm", "/")) and "<html" not in icerik[:2000].lower():
+        return icerik.strip(), []
+    p = _KodBlokCikarici()
+    try:
+        p.feed(icerik)
+        p.close()
+    except Exception:
+        pass
+    gorulen, bloklar = set(), []
+    for b in p.bloklar:
+        if b not in gorulen:
+            gorulen.add(b)
+            bloklar.append(b)
+    metin = "\n\n".join(bloklar) if bloklar else "\n".join(p.metin)
+    linkler = [urllib.parse.urljoin(url, h).split("#")[0] for h in p.linkler]
+    return metin.strip(), linkler
+
+
+def _dosya_adi(url):
+    u = urllib.parse.urlparse(url)
+    ad = re.sub(r"[^a-zA-Z0-9]+", "_", (u.netloc + u.path).strip("/")).strip("_")
+    return (ad or "sayfa")[:120] + ".txt"
+
+
+
+# =============================================================================
 # 2. ELALEM TOKENIZER (Karakter Tabanlı Sözlük)
 # =============================================================================
 
@@ -480,6 +637,15 @@ class ElalemTokenizer:
         self.vocab_size = len(chars)
         self.stoi = {ch: i for i, ch in enumerate(chars)}
         self.itos = {i: ch for i, ch in enumerate(chars)}
+
+    # Sözlükte olmayan karakterler için yakın karşılıklar (dış veriyi temizlerken)
+    _ESDEGER = {"\u00a0": " ", "\u2009": " ", "\u200b": "", "\ufeff": "", "\u00ab": '"', "\u00bb": '"',
+                "\u2032": "'", "\u2033": '"', "\u00d7": "x", "\u2212": "-", "\u00b7": "*"}
+
+    def temizle(self, text):
+        """Dış veriyi sözlüğe uydurur: bilinmeyen karakterler eşdeğeriyle değişir ya da atılır.
+        Böylece sözlük (ve model boyutu) dış veri eklense de değişmez."""
+        return "".join(ch if ch in self.stoi else self._ESDEGER.get(ch, "") for ch in text)
 
     def encode(self, text):
         """Metin -> sayı listesi.  'abc' -> [i_a, i_b, i_c]  (uzunluk = T)"""
@@ -1010,16 +1176,146 @@ class ElalemMotoru:
         self.hedef_adim = 0
         self.adim_suresi = 0.0
 
+        self.temel_corpus = corpus
+        self.veri_kaynaklari = []
+        self.dis_karakter = 0
+        self.web_durum = {"calisiyor": False, "kaydedilen": 0, "hedef": 0, "son_url": ""}
+        self.web_dur_event = threading.Event()
+
+        # Her model boyutu kendi dosyasına kaydedilir (küçük model: elalem_checkpoint.pt)
+        c = self.cfg
+        ek = "" if (c["n_embd"], c["n_layer"], c["block_size"]) == (192, 4, 128) else \
+            f"_{c['n_embd']}x{c['n_layer']}x{c['block_size']}"
+        self.ckpt_yolu = CHECKPOINT_PATH.replace(".pt", ek + ".pt")
+
+        # Sözlük sadece gömülü veriden türetilir -> dış veri eklense de sabit kalır
         self.tokenizer = ElalemTokenizer(text=corpus)
         self._model_kur()
         self._checkpoint_yukle()
-
-        data = torch.tensor(self.tokenizer.encode(corpus), dtype=torch.long)   # [N]
-        n = int(0.9 * len(data))
-        self.train_data = data[:n]            # [N_train]
-        self.val_data = data[n:]              # [N_val]
+        self._veriyi_yukle()
         self.log(f"Cihaz: {DEVICE} | Sözlük: {self.tokenizer.vocab_size} karakter | "
-                 f"Veri: {len(data):,} token | Parametre: {self.model.parametre_sayisi():,}")
+                 f"Parametre: {self.model.parametre_sayisi():,}")
+
+    # ------------------------------------------------------------ veri
+    def _veriyi_yukle(self):
+        """Gömülü veri + veri/ klasörü -> train/val tensörleri."""
+        dis, kaynaklar = dis_veri_oku()
+        dis = self.tokenizer.temizle(dis)
+        temel = torch.tensor(self.tokenizer.encode(self.temel_corpus), dtype=torch.long)  # [N_temel]
+        nt = int(0.9 * len(temel))
+        # Gömülü sohbet biçimi unutulmasın diye, dış veri büyüdükçe gömülü veri tekrarlanır (~%20 pay)
+        tekrar = 1 if not dis else min(50, max(1, math.ceil(0.25 * len(dis) / len(self.temel_corpus))))
+        train_parca = [temel[:nt]] * tekrar                                               # her biri [nt]
+        val_parca = [temel[nt:]]
+        if dis:
+            d = torch.tensor(self.tokenizer.encode(dis), dtype=torch.long)                  # [N_dis]
+            if len(d) >= 20 * self.cfg["block_size"]:
+                nd = int(0.9 * len(d))
+                train_parca.append(d[:nd])
+                val_parca.append(d[nd:])
+            else:                       # çok az dış veri: hepsi eğitime gider
+                train_parca.append(d)
+        train_data = torch.cat(train_parca)                                                # [N_train]
+        val_data = torch.cat(val_parca)                                                    # [N_val]
+        with self.lock:
+            self.train_data, self.val_data = train_data, val_data
+        with self.state_lock:
+            self.veri_kaynaklari = kaynaklar
+            self.dis_karakter = len(dis)
+        self.log(f"Veri yüklendi: gömülü {len(self.temel_corpus):,} karakter x{tekrar} + "
+                 f"dış {len(dis):,} karakter ({len(kaynaklar)} dosya) -> "
+                 f"train {len(train_data):,} / val {len(val_data):,} token")
+
+    def veriyi_yenile(self):
+        if self.egitimde:
+            return False, "Eğitim sürerken veri yenilenemez. Önce eğitimi durdur."
+        self._veriyi_yukle()
+        return True, f"Veri yenilendi: {len(self.veri_kaynaklari)} dış dosya, {self.dis_karakter:,} karakter."
+
+    def metin_ekle(self, ad, metin):
+        metin = (metin or "").strip()
+        if len(metin) < 20:
+            return False, "Metin çok kısa (en az 20 karakter)."
+        ad = re.sub(r"[^a-zA-Z0-9_-]+", "_", ad or "").strip("_") or time.strftime("metin_%Y%m%d_%H%M%S")
+        klasor = os.path.join(VERI_DIR, "elle")
+        os.makedirs(klasor, exist_ok=True)
+        with open(os.path.join(klasor, ad + ".txt"), "w", encoding="utf-8") as f:
+            f.write(metin)
+        self.log(f"Elle veri eklendi: veri/elle/{ad}.txt ({len(metin):,} karakter)")
+        if self.egitimde:
+            return True, "Kaydedildi. Eğitim bitince 'Veriyi Yenile' ile modele eklenecek."
+        self._veriyi_yukle()
+        return True, "Metin eklendi ve veri yenilendi."
+
+    def web_cekimi_baslat(self, url, max_sayfa):
+        u = urllib.parse.urlparse(url)
+        if u.scheme not in ("http", "https") or not u.netloc:
+            return False, "Geçerli bir http(s) adresi gir."
+        with self.state_lock:
+            if self.web_durum["calisiyor"]:
+                return False, "Zaten bir indirme çalışıyor."
+            self.web_durum = {"calisiyor": True, "kaydedilen": 0, "hedef": max_sayfa, "son_url": url}
+        self.web_dur_event.clear()
+        threading.Thread(target=self._web_cek, args=(url, max_sayfa), daemon=True).start()
+        return True, f"İndirme başladı: en fazla {max_sayfa} sayfa."
+
+    def web_cekimi_durdur(self):
+        self.web_dur_event.set()
+        return True, "İndirme durduruluyor."
+
+    def _web_cek(self, baslangic, max_sayfa):
+        """Başlangıç adresinden, aynı site ve aynı klasör altındaki sayfaları gezerek kod örneklerini indirir.
+        robots.txt kurallarına uyar ve istekler arasında 1 sn bekler."""
+        u = urllib.parse.urlparse(baslangic)
+        onek = u.path.rsplit("/", 1)[0] + "/"
+        robots = urllib.robotparser.RobotFileParser()
+        robots.set_url(f"{u.scheme}://{u.netloc}/robots.txt")
+        try:
+            robots.read()
+        except Exception:
+            robots = None
+        hedef = os.path.join(VERI_DIR, "web")
+        os.makedirs(hedef, exist_ok=True)
+        kuyruk, gorulen, kaydedilen = deque([baslangic]), set(), 0
+        self.log(f"Web indirme: {baslangic} (klasör: {onek}, en fazla {max_sayfa} sayfa)")
+        try:
+            while kuyruk and kaydedilen < max_sayfa and not self.web_dur_event.is_set():
+                url = kuyruk.popleft()
+                if url in gorulen:
+                    continue
+                gorulen.add(url)
+                if robots is not None and not robots.can_fetch(TARAYICI_KIMLIGI, url):
+                    self.log(f"robots.txt izin vermiyor, atlandı: {url}")
+                    continue
+                with self.state_lock:
+                    self.web_durum["son_url"] = url
+                try:
+                    icerik, tip = sayfa_indir(url)
+                except Exception as e:
+                    self.log(f"İndirilemedi ({e}): {url}")
+                    continue
+                metin, linkler = sayfadan_veri_cikar(icerik, tip, url)
+                metin = self.tokenizer.temizle(metin)
+                if len(metin) >= 50:
+                    with open(os.path.join(hedef, _dosya_adi(url)), "w", encoding="utf-8") as f:
+                        f.write(metin)
+                    kaydedilen += 1
+                    with self.state_lock:
+                        self.web_durum["kaydedilen"] = kaydedilen
+                    self.log(f"[{kaydedilen}/{max_sayfa}] {len(metin):,} karakter: {url}")
+                for link in linkler:
+                    lu = urllib.parse.urlparse(link)
+                    if (lu.scheme in ("http", "https") and lu.netloc == u.netloc and lu.path.startswith(onek)
+                            and link not in gorulen
+                            and not re.search(r"\.(png|jpe?g|gif|svg|webp|ico|pdf|zip|mp4|mp3|woff2?)$", lu.path, re.I)):
+                        kuyruk.append(link)
+                time.sleep(1.0)  # siteye yük bindirmemek için
+        finally:
+            with self.state_lock:
+                self.web_durum["calisiyor"] = False
+            self.log(f"Web indirme bitti: {kaydedilen} sayfa veri/web/ klasörüne kaydedildi.")
+            if kaydedilen and not self.egitimde:
+                self._veriyi_yukle()
 
     def _model_kur(self):
         c = self.cfg
@@ -1049,19 +1345,19 @@ class ElalemMotoru:
                 "vocab": self.tokenizer.chars,
                 "config": {k: v for k, v in self.cfg.items()},
                 "adim": self.adim,
-            }, CHECKPOINT_PATH)
-            self.log(f"Model kaydedildi: {os.path.basename(CHECKPOINT_PATH)}")
+            }, self.ckpt_yolu)
+            self.log(f"Model kaydedildi: {os.path.basename(self.ckpt_yolu)}")
         except Exception as e:
             self.log(f"Kaydetme hatası: {e}")
 
     def _checkpoint_yukle(self):
-        if not os.path.exists(CHECKPOINT_PATH):
+        if not os.path.exists(self.ckpt_yolu):
             return
         try:
             try:
-                ck = torch.load(CHECKPOINT_PATH, map_location=DEVICE, weights_only=True)
+                ck = torch.load(self.ckpt_yolu, map_location=DEVICE, weights_only=True)
             except TypeError:  # eski PyTorch sürümleri
-                ck = torch.load(CHECKPOINT_PATH, map_location=DEVICE)
+                ck = torch.load(self.ckpt_yolu, map_location=DEVICE)
             ayni_mimari = all(ck["config"].get(k) == self.cfg[k]
                               for k in ("block_size", "n_embd", "n_head", "n_layer"))
             if list(ck["vocab"]) != self.tokenizer.chars or not ayni_mimari:
@@ -1172,6 +1468,13 @@ class ElalemMotoru:
                 "parametre": self.model.parametre_sayisi(),
                 "sozluk": self.tokenizer.vocab_size,
                 "veri_token": int(len(self.train_data) + len(self.val_data)),
+                "veri": {
+                    "dis_karakter": self.dis_karakter,
+                    "kaynak_sayisi": len(self.veri_kaynaklari),
+                    "kaynaklar": sorted(self.veri_kaynaklari, key=lambda k: -k["karakter"])[:40],
+                    "klasor": VERI_DIR,
+                    "web": dict(self.web_durum),
+                },
                 "config": self.cfg,
                 "egitimde": self.egitimde,
                 "adim": self.adim,
@@ -1360,6 +1663,32 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
       <div class="legend"><span><i style="background:#6c8cff"></i>Train loss (adım)</span><span><i style="background:#f5b041"></i>Val loss (değerlendirme)</span></div>
       <div class="log" id="log"></div>
     </section>
+
+    <section class="panel">
+      <h2>📚 Eğitim Verisi</h2>
+      <p class="sub">Gömülü veriye ek olarak <code id="veriKlasor">veri/</code> klasöründeki .html/.css/.js/.py/.txt/.md dosyaları da eğitime katılır.</p>
+      <div class="stats" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-top:0">
+        <div class="stat"><span>Dış dosya</span><b id="dvDosya">0</b></div>
+        <div class="stat"><span>Dış karakter</span><b id="dvKarakter">0</b></div>
+        <div class="stat"><span>Toplam token</span><b id="dvToken">-</b></div>
+      </div>
+      <div class="field" style="margin-bottom:10px"><label for="urlIn">Web sayfasından kod örneklerini indir</label>
+        <input id="urlIn" type="text" placeholder="https://developer.mozilla.org/en-US/docs/Web/HTML/Element/div"></div>
+      <div class="row" style="margin-bottom:6px">
+        <div class="field"><label for="maxSayfa">En fazla sayfa (aynı klasördeki linkler gezilir)</label><input id="maxSayfa" type="number" min="1" max="300" value="1"></div>
+        <button class="btn-primary" id="urlBtn">⬇ İndir</button>
+        <button class="btn-danger" id="urlStop" disabled>■ Durdur</button>
+      </div>
+      <div class="preview-note" id="webDurum">Sayfadaki &lt;pre&gt;/&lt;code&gt; kod blokları çıkarılır, robots.txt kurallarına uyulur.</div>
+      <div class="field" style="margin-top:14px"><label for="metinIn">Ya da kendi kodunu / metnini yapıştır</label>
+        <textarea id="metinIn" rows="4" style="font:12px/1.5 var(--mono)" placeholder="<div class=&quot;kart&quot;>...</div>"></textarea></div>
+      <div class="row" style="margin-top:8px">
+        <div class="field"><input id="metinAd" type="text" placeholder="Dosya adı (isteğe bağlı)"></div>
+        <button class="btn-ghost" id="metinBtn">＋ Veriye Ekle</button>
+        <button class="btn-ghost" id="reloadBtn" title="veri/ klasörüne elle dosya koyduysan">↻ Veriyi Yenile</button>
+      </div>
+      <ul class="checks" id="kaynakList" style="margin-top:14px;max-height:220px;overflow:auto"></ul>
+    </section>
   </div>
 
   <div class="col">
@@ -1494,10 +1823,41 @@ async function refresh() {
       lastLogLen = s.loglar.length;
     }
     drawChart(s);
+    renderVeri(s);
   } catch (e) { $("statusText").textContent = "Bağlantı yok"; }
 }
 setInterval(refresh, 1000); refresh();
 window.addEventListener("resize", () => drawChart(lastState));
+
+// ------------------------------------------------------------ veri
+function renderVeri(s) {
+  const v = s.veri; if (!v) return;
+  $("veriKlasor").textContent = v.klasor;
+  $("dvDosya").textContent = v.kaynak_sayisi;
+  $("dvKarakter").textContent = v.dis_karakter.toLocaleString("tr-TR");
+  $("dvToken").textContent = s.veri_token.toLocaleString("tr-TR");
+  const w = v.web;
+  $("urlBtn").disabled = w.calisiyor; $("urlStop").disabled = !w.calisiyor;
+  $("urlBtn").innerHTML = w.calisiyor ? '<span class="spinner"></span>İndiriliyor...' : "⬇ İndir";
+  if (w.calisiyor) $("webDurum").textContent = `${w.kaydedilen}/${w.hedef} sayfa kaydedildi · ${w.son_url}`;
+  const html = v.kaynaklar.map(k => `<li class="pass"><span class="mark">📄</span><div><div class="name">${esc(k.ad)}</div>
+    <div class="detail">${k.karakter.toLocaleString("tr-TR")} karakter</div></div></li>`).join("");
+  const box = $("kaynakList"), yeni = html || '<li class="empty" style="border:0;background:none">Henüz dış veri yok.</li>';
+  if (box._last !== yeni) { box.innerHTML = yeni; box._last = yeni; }
+}
+$("urlBtn").onclick = async () => {
+  const url = $("urlIn").value.trim();
+  if (!url) { toast("Bir adres gir."); return; }
+  try { toast((await api("/api/data/url", { url, max_sayfa: Number($("maxSayfa").value) })).mesaj); refresh(); }
+  catch (e) { toast("Hata: " + e.message); }
+};
+$("urlStop").onclick = async () => { try { toast((await api("/api/data/stop", {})).mesaj); } catch (e) { toast("Hata: " + e.message); } };
+$("metinBtn").onclick = async () => {
+  try { const r = await api("/api/data/text", { ad: $("metinAd").value, metin: $("metinIn").value });
+    toast(r.mesaj); $("metinIn").value = ""; refresh(); }
+  catch (e) { toast("Hata: " + e.message); }
+};
+$("reloadBtn").onclick = async () => { try { toast((await api("/api/data/reload", {})).mesaj); refresh(); } catch (e) { toast("Hata: " + e.message); } };
 
 // ---------------------------------------------------------------- eğitim
 $("trainBtn").onclick = async () => {
@@ -1700,6 +2060,19 @@ def handler_olustur(motor):
                         top_k=max(0, min(int(veri.get("top_k", 10)), 500)),
                     )
                     self._json(200, sonuc)
+                elif yol == "/api/data/reload":
+                    ok, mesaj = motor.veriyi_yenile()
+                    self._json(200 if ok else 409, {"ok": ok, "mesaj": mesaj, "hata": None if ok else mesaj})
+                elif yol == "/api/data/text":
+                    ok, mesaj = motor.metin_ekle(str(veri.get("ad", "")), str(veri.get("metin", "")))
+                    self._json(200 if ok else 400, {"ok": ok, "mesaj": mesaj, "hata": None if ok else mesaj})
+                elif yol == "/api/data/url":
+                    sayfa = max(1, min(int(veri.get("max_sayfa", 1)), 300))
+                    ok, mesaj = motor.web_cekimi_baslat(str(veri.get("url", "")).strip(), sayfa)
+                    self._json(200 if ok else 400, {"ok": ok, "mesaj": mesaj, "hata": None if ok else mesaj})
+                elif yol == "/api/data/stop":
+                    ok, mesaj = motor.web_cekimi_durdur()
+                    self._json(200, {"ok": ok, "mesaj": mesaj})
                 elif yol == "/api/qc":
                     self._json(200, qa_qc_dogrula(str(veri.get("code", ""))))
                 else:
@@ -1783,9 +2156,12 @@ def main():
     ap.add_argument("--open", action="store_true", help="Tarayıcıda paneli otomatik aç")
     ap.add_argument("--selftest", action="store_true", help="Kısa uçtan uca test yapıp çık")
     ap.add_argument("--selftest-steps", type=int, default=30, help="Self-test eğitim adımı")
+    ap.add_argument("--boyut", choices=sorted(BOYUTLAR), default="kucuk",
+                    help="Model boyutu: kucuk (hızlı), orta, buyuk (çok veri için)")
     args = ap.parse_args()
 
-    motor = ElalemMotoru(CONFIG, FULLSTACK_DATA)
+    cfg = dict(CONFIG, **BOYUTLAR[args.boyut])
+    motor = ElalemMotoru(cfg, FULLSTACK_DATA)
     if args.selftest:
         sys.exit(0 if self_test(motor, args.selftest_steps) else 1)
     sunucuyu_baslat(motor, args.host, args.port, args.open)
