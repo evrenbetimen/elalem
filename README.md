@@ -163,7 +163,7 @@ Ortak ayarlar: dropout 0.1, `eval_interval` 50 adım, `eval_iters` 10 batch, see
 | Değerlendirme | Her 50 adımda ve son adımda, 10 batch ortalaması (train + val) |
 | Çalışma şekli | Arka plan thread'i, panel her saniye durumu çeker |
 | Durdurma | Panelden **■ Durdur**, mevcut adım bitince durur |
-| Kayıt | Eğitim bitince ya da durdurulunca ağırlıklar otomatik kaydedilir, sonraki açılışta kaldığı adımdan devam eder |
+| Kayıt | Ağırlıklar her 250 adımda bir, eğitim bitince ve durdurulunca otomatik kaydedilir; sonraki açılışta kaldığı adımdan devam eder |
 
 Öğrenme oranı her eğitim başlatılışında panelden değiştirilebilir. Eğitim sırasında üretim yapılabilir; model kilidi her adım arasında serbest kalır.
 

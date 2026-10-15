@@ -1357,7 +1357,8 @@ class ElalemMotoru:
                 "vocab": self.tokenizer.chars,
                 "config": {k: v for k, v in self.cfg.items()},
                 "adim": self.adim,
-            }, self.ckpt_yolu)
+            }, self.ckpt_yolu + ".tmp")
+            os.replace(self.ckpt_yolu + ".tmp", self.ckpt_yolu)   # yarıda kalan yazım eski kaydı bozmasın
             self.log(f"Model kaydedildi: {os.path.basename(self.ckpt_yolu)}")
         except Exception as e:
             self.log(f"Kaydetme hatası: {e}")
@@ -1418,6 +1419,9 @@ class ElalemMotoru:
             with self.state_lock:
                 self.val_gecmisi.append((step, s["train"], s["val"]))
             self.log(f"DEĞERLENDİRME adım {step} | train {s['train']:.4f} | val {s['val']:.4f}")
+            if step % 250 == 0:         # program kapanırsa en fazla 250 adım kaybolsun
+                with self.lock:
+                    self._checkpoint_kaydet()
 
         try:
             train_model(self.model, self.optimizer, self.train_data, self.val_data, self.cfg,
