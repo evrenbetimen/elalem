@@ -222,12 +222,16 @@ Kendi örneklerini aynı biçimde yazarsan modele "şu isteğe şu cevabı ver" 
 | `veri/elle/anlatim_ornekleri.txt` | 33 kodsuz, düz Türkçe/İngilizce açıklama (HTML nedir, flexbox, API, döngü, dil modeli, loss…) |
 | `veri/elle/link_ornekleri.txt` | 28 link / form + link / buton / menü / kart örneği |
 | `sentetik_form_uret.py` | İstenen alanları içeren form örnekleri üretir: 11 alan türü × 6 form türü × 7 istek kalıbı |
+| `sentetik_sayfa_uret.py` | Form dışı sayfa örnekleri üretir: kişisel sayfa, hakkımda, portföy, menü, ürün kartı, blog yazısı, alt bilgi |
 
-Sentetik form verisini üretmek için:
+Sentetik veriyi üretmek için (sayı vermezseniz form 4000, sayfa 3000 örnek):
 
 ```bash
-python3 sentetik_form_uret.py > veri/elle/sentetik_formlar.txt   # 4000 örnek, ~1,4 MB
+python3 sentetik_form_uret.py 1500 > veri/elle/sentetik_formlar.txt
+python3 sentetik_sayfa_uret.py 3000 > veri/elle/sentetik_sayfalar.txt
 ```
+
+Yalnızca form verisiyle eğitilen model her isteğe form ile cevap verir ("kişisel sayfa tasarla" deyince bile form yazar). İki üreteci birlikte kullanın ki model istek türünü ayırt etmeyi öğrensin.
 
 ---
 
@@ -318,6 +322,7 @@ Tüm cevaplar JSON'dur. Sunucu sadece `127.0.0.1`'e bağlanır.
 elalem/
 ├── main.py                  # tüm model, eğitim, QC, sunucu ve arayüz
 ├── sentetik_form_uret.py    # sentetik form verisi üreteci
+├── sentetik_sayfa_uret.py   # sentetik sayfa verisi üreteci
 ├── README.md
 ├── veri/
 │   ├── elle/                # elle eklenen / hazır örnek veriler (git'te)
