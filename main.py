@@ -2177,21 +2177,24 @@ def main():
     ap.add_argument("--block-size", type=int, help="Bağlam uzunluğu (karakter)")
     ap.add_argument("--batch-size", type=int, help="Batch boyutu")
     ap.add_argument("--lr", type=float, help="Varsayılan öğrenme oranı")
+    ap.add_argument("--dropout", type=float, help="Dropout oranı, 0-0.5 (varsayılan 0.1)")
     args = ap.parse_args()
 
     cfg = dict(CONFIG, **BOYUTLAR[args.boyut])
     for anahtar, deger in (("n_embd", args.n_embd), ("n_layer", args.n_layer), ("n_head", args.n_head),
                            ("block_size", args.block_size), ("batch_size", args.batch_size),
-                           ("learning_rate", args.lr)):
+                           ("learning_rate", args.lr), ("dropout", args.dropout)):
         if deger is not None:
             cfg[anahtar] = deger
     if min(cfg["n_embd"], cfg["n_layer"], cfg["n_head"], cfg["block_size"], cfg["batch_size"]) < 1:
         ap.error("Model ayarları pozitif olmalı.")
+    if not 0 <= cfg["dropout"] < 1:
+        ap.error("--dropout 0 ile 1 arasında olmalı.")
     if cfg["n_embd"] % cfg["n_head"]:
         ap.error(f"--n-embd ({cfg['n_embd']}) --n-head ({cfg['n_head']}) sayısına tam bölünmeli.")
     tahmini = 12 * cfg["n_layer"] * cfg["n_embd"] ** 2
     print(f"Model: n_embd={cfg['n_embd']} n_head={cfg['n_head']} n_layer={cfg['n_layer']} "
-          f"block_size={cfg['block_size']} batch={cfg['batch_size']} lr={cfg['learning_rate']} "
+          f"block_size={cfg['block_size']} batch={cfg['batch_size']} lr={cfg['learning_rate']} dropout={cfg['dropout']} "
           f"(~{tahmini / 1e6:.1f}M parametre)", flush=True)
     motor = ElalemMotoru(cfg, FULLSTACK_DATA)
     if args.selftest:

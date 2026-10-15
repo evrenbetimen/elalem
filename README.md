@@ -326,6 +326,7 @@ Tüm cevaplar JSON'dur. Sunucu sadece `127.0.0.1`'e bağlanır.
 | `--block-size` | boyuta göre | Bağlam uzunluğu (karakter) |
 | `--batch-size` | boyuta göre | Batch boyutu |
 | `--lr` | boyuta göre | Varsayılan öğrenme oranı (panele de yansır) |
+| `--dropout` | 0.1 | Dropout oranı; veri azken büyük modelde 0.2-0.3 ezberlemeyi frenler |
 | `--selftest` | kapalı | Tokenizer, batch şekilleri, model çıktısı, eğitim, üretim ve 6 QC vakasını test edip çıkar (çıkış kodu 0/1) |
 | `--selftest-steps` | `30` | Self-test sırasında eğitim adımı |
 
@@ -378,6 +379,7 @@ Açılışta terminale seçilen ayarlar ve tahmini parametre sayısı yazılır,
 | `--block-size` | Modelin aynı anda görebildiği karakter sayısı. Parametre değil, bellek ve hız maliyeti. |
 | `--batch-size` | Her adımda işlenen örnek sayısı. Bellek yetmezse düşür. |
 | `--lr` | Öğrenme oranı. Model büyüdükçe düşürülmeli (ör. 3e-4, 2e-4). |
+| `--dropout` | Ezberlemeyi frenler. Doğrulama loss'u eğitimden çok yüksekse 0.2-0.3 deneyin. |
 
 Kaba hesap: **parametre ≈ 12 × n_layer × n_embd²**.
 
