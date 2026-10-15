@@ -1,2 +1,3 @@
 __pycache__/
-elalem_checkpoint.pt
+elalem_checkpoint*.pt
+veri/web/
