@@ -66,7 +66,7 @@ Elalem bir **öğrenme ve deney projesidir**. Gördüğü karakter dizilerini ta
 | Tokenizer | Kendi karakter tokenizer'ı, **131 karakterlik sözlük** |
 | Dikkat | Causal (üçgen maskeli) Multi-Head Self-Attention, elle yazılmış |
 | Blok yapısı | Pre-LayerNorm + residual bağlantılar, FFN: Linear → GELU → Linear (4× genişlik) |
-| Parametre | Küçük **1,83 M** · Orta **4,90 M** · Büyük **14,43 M** |
+| Parametre | Küçük **1,83 M** · Orta **4,90 M** · Büyük **14,43 M** · Dev **38,14 M** · ya da istediğin kadar (`--n-embd`, `--n-layer`…) |
 | Bağlam (block_size) | Küçük 128 · Orta/Büyük 512 karakter |
 | Optimizer / kayıp | AdamW + `nn.CrossEntropyLoss` |
 | Cihaz önceliği | CUDA → Apple `mps` (M serisi GPU) → CPU |
@@ -143,10 +143,11 @@ Pre-LayerNorm düzeni: `x = x + Attn(LN(x))`, ardından `x = x + FFN(LN(x))`.
 | `kucuk` (varsayılan) | 192 | 6 | 4 | 128 | 32 | 3e-3 | **1.827.264** | `elalem_checkpoint.pt` |
 | `orta` | 256 | 8 | 6 | 512 | 24 | 1e-3 | **4.899.072** | `elalem_checkpoint_256x6x512.pt` |
 | `buyuk` | 384 | 6 | 8 | 512 | 32 | 6e-4 | **14.434.176** | `elalem_checkpoint_384x8x512.pt` |
+| `dev` | 512 | 8 | 12 | 512 | 16 | 3e-4 | **38.140.416** | `elalem_checkpoint_512x12x512.pt` |
 
 Ortak ayarlar: dropout 0.1, `eval_interval` 50 adım, `eval_iters` 10 batch, seed 1337.
 
-**Hangisini seçmeli?** Sadece denemek için `kucuk`. Web'den veri indirdiysen ya da form gibi uzun çıktılar istiyorsan `orta`. Küçük model aynı anda sadece 128 karakter görür, uzun bir form yazarken isteği unutur. Çok veri varsa `buyuk`.
+**Hangisini seçmeli?** Sadece denemek için `kucuk`. Web'den veri indirdiysen ya da form gibi uzun çıktılar istiyorsan `orta`. Küçük model aynı anda sadece 128 karakter görür, uzun bir form yazarken isteği unutur. Çok veri varsa `buyuk`, güçlü bir Mac ve bol veriyle `dev`.
 
 ---
 
@@ -221,12 +222,16 @@ Kendi örneklerini aynı biçimde yazarsan modele "şu isteğe şu cevabı ver" 
 | `veri/elle/anlatim_ornekleri.txt` | 33 kodsuz, düz Türkçe/İngilizce açıklama (HTML nedir, flexbox, API, döngü, dil modeli, loss…) |
 | `veri/elle/link_ornekleri.txt` | 28 link / form + link / buton / menü / kart örneği |
 | `sentetik_form_uret.py` | İstenen alanları içeren form örnekleri üretir: 11 alan türü × 6 form türü × 7 istek kalıbı |
+| `sentetik_sayfa_uret.py` | Form dışı sayfa örnekleri üretir: kişisel sayfa, hakkımda, portföy, menü, ürün kartı, blog yazısı, alt bilgi |
 
-Sentetik form verisini üretmek için:
+Sentetik veriyi üretmek için (sayı vermezseniz form 4000, sayfa 3000 örnek):
 
 ```bash
-python3 sentetik_form_uret.py > veri/elle/sentetik_formlar.txt   # 4000 örnek, ~1,4 MB
+python3 sentetik_form_uret.py 1500 > veri/elle/sentetik_formlar.txt
+python3 sentetik_sayfa_uret.py 3000 > veri/elle/sentetik_sayfalar.txt
 ```
+
+Yalnızca form verisiyle eğitilen model her isteğe form ile cevap verir ("kişisel sayfa tasarla" deyince bile form yazar). İki üreteci birlikte kullanın ki model istek türünü ayırt etmeyi öğrensin.
 
 ---
 
@@ -299,7 +304,13 @@ Tüm cevaplar JSON'dur. Sunucu sadece `127.0.0.1`'e bağlanır.
 | `--host` | `127.0.0.1` | Sunucu adresi |
 | `--port` | `8080` | Sunucu portu |
 | `--open` | kapalı | Paneli tarayıcıda otomatik aç |
-| `--boyut` | `kucuk` | Model boyutu: `kucuk`, `orta`, `buyuk` |
+| `--boyut` | `kucuk` | Hazır model boyutu: `kucuk`, `orta`, `buyuk`, `dev` |
+| `--n-embd` | boyuta göre | Gömme boyutu; `--n-head`'e tam bölünmeli |
+| `--n-layer` | boyuta göre | Transformer blok sayısı |
+| `--n-head` | boyuta göre | Dikkat kafası sayısı |
+| `--block-size` | boyuta göre | Bağlam uzunluğu (karakter) |
+| `--batch-size` | boyuta göre | Batch boyutu |
+| `--lr` | boyuta göre | Varsayılan öğrenme oranı (panele de yansır) |
 | `--selftest` | kapalı | Tokenizer, batch şekilleri, model çıktısı, eğitim, üretim ve 6 QC vakasını test edip çıkar (çıkış kodu 0/1) |
 | `--selftest-steps` | `30` | Self-test sırasında eğitim adımı |
 
@@ -311,6 +322,7 @@ Tüm cevaplar JSON'dur. Sunucu sadece `127.0.0.1`'e bağlanır.
 elalem/
 ├── main.py                  # tüm model, eğitim, QC, sunucu ve arayüz
 ├── sentetik_form_uret.py    # sentetik form verisi üreteci
+├── sentetik_sayfa_uret.py   # sentetik sayfa verisi üreteci
 ├── README.md
 ├── veri/
 │   ├── elle/                # elle eklenen / hazır örnek veriler (git'te)
@@ -332,18 +344,35 @@ elalem/
 
 ## Parametreleri büyütmek
 
-En kolayı `--boyut buyuk`. Daha büyük bir model için `main.py` içindeki `BOYUTLAR` sözlüğünü düzenle:
+Kodu açmadan komut satırından ayarlanır. Önce bir hazır boyut seçilir, verdiğin ayarlar onun üzerine yazılır:
+
+```bash
+python3 main.py --boyut dev --open                                  # hazır ~38M
+python3 main.py --boyut orta --n-layer 10 --open                    # orta, ama 10 blok
+python3 main.py --n-embd 640 --n-head 10 --n-layer 12 --block-size 512 --batch-size 12 --lr 2e-4 --open   # ~59M
+```
+
+Açılışta terminale seçilen ayarlar ve tahmini parametre sayısı yazılır, panelin üst çubuğunda da gerçek sayı görünür.
 
 | Ayar | Etkisi |
 |---|---|
-| `n_embd` | Her karakterin temsil genişliği. Parametre sayısı bunun **karesiyle** artar. `n_head`'e tam bölünmeli. |
-| `n_layer` | Transformer blok sayısı. Parametre sayısı bununla **doğru orantılı** artar. |
-| `n_head` | Dikkat kafası sayısı. Parametre sayısını değiştirmez. |
-| `block_size` | Modelin aynı anda görebildiği karakter sayısı. Parametre değil, bellek ve hız maliyeti. |
+| `--n-embd` | Her karakterin temsil genişliği. Parametre sayısı bunun **karesiyle** artar. `--n-head`'e tam bölünmeli. |
+| `--n-layer` | Transformer blok sayısı. Parametre sayısı bununla **doğru orantılı** artar. |
+| `--n-head` | Dikkat kafası sayısı. Parametre sayısını değiştirmez. |
+| `--block-size` | Modelin aynı anda görebildiği karakter sayısı. Parametre değil, bellek ve hız maliyeti. |
+| `--batch-size` | Her adımda işlenen örnek sayısı. Bellek yetmezse düşür. |
+| `--lr` | Öğrenme oranı. Model büyüdükçe düşürülmeli (ör. 3e-4, 2e-4). |
 
-Kaba hesap: **parametre ≈ 12 × n_layer × n_embd²**. Örneğin `n_embd=512, n_head=8, n_layer=12` yaklaşık 38 milyon parametre eder. Daha büyük model daha çok veri, daha uzun eğitim ve daha düşük öğrenme oranı (ör. 3e-4) ister. Mimari değişince eski ağırlıklar yüklenmez, model sıfırdan başlar.
+Kaba hesap: **parametre ≈ 12 × n_layer × n_embd²**.
 
----
+| n_embd | n_layer | Yaklaşık parametre |
+|---|---|---|
+| 384 | 8 | 14 M |
+| 512 | 12 | 38 M |
+| 640 | 12 | 59 M |
+| 768 | 12 | 85 M |
+
+Her ayar kombinasyonu ağırlıklarını kendi dosyasına (`elalem_checkpoint_<n_embd>x<n_layer>x<block_size>.pt`) kaydeder; mimari değişince model sıfırdan başlar. Daha büyük model daha çok veri, daha uzun eğitim ve daha fazla bellek ister. Bellek hatası alırsan önce `--batch-size`'ı düşür.
 
 ## Sınırlamalar
 

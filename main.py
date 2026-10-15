@@ -90,10 +90,12 @@ CONFIG = {
 }
 
 # Daha fazla veri = daha büyük model. '--boyut' ile seçilir (CPU'da 'kucuk', Apple M serisinde 'orta').
+# İstenirse --n-embd, --n-layer, --n-head, --block-size, --batch-size, --lr ile tek tek ezilebilir.
 BOYUTLAR = {
     "kucuk": {"n_embd": 192, "n_head": 6, "n_layer": 4, "block_size": 128, "batch_size": 32, "learning_rate": 3e-3},
     "orta":  {"n_embd": 256, "n_head": 8, "n_layer": 6, "block_size": 512, "batch_size": 24, "learning_rate": 1e-3},
     "buyuk": {"n_embd": 384, "n_head": 6, "n_layer": 8, "block_size": 512, "batch_size": 32, "learning_rate": 6e-4},
+    "dev":   {"n_embd": 512, "n_head": 8, "n_layer": 12, "block_size": 512, "batch_size": 16, "learning_rate": 3e-4},
 }
 
 
@@ -1806,6 +1808,7 @@ async function refresh() {
   try {
     const s = await api("/api/status");
     lastState = s;
+    if (!window._lrAyarli) { $("lr").value = s.config.learning_rate; window._lrAyarli = true; }
     $("device").textContent = s.cihaz.toUpperCase();
     $("params").textContent = (s.parametre / 1e6).toFixed(2) + "M";
     $("vocab").textContent = s.sozluk;
@@ -2161,11 +2164,30 @@ def main():
     ap.add_argument("--open", action="store_true", help="Tarayıcıda paneli otomatik aç")
     ap.add_argument("--selftest", action="store_true", help="Kısa uçtan uca test yapıp çık")
     ap.add_argument("--selftest-steps", type=int, default=30, help="Self-test eğitim adımı")
-    ap.add_argument("--boyut", choices=sorted(BOYUTLAR), default="kucuk",
-                    help="Model boyutu: kucuk (hızlı), orta, buyuk (çok veri için)")
+    ap.add_argument("--boyut", choices=list(BOYUTLAR), default="kucuk",
+                    help="Hazır model boyutu: kucuk (~1.8M), orta (~4.9M), buyuk (~14M), dev (~38M parametre)")
+    ap.add_argument("--n-embd", type=int, help="Gömme boyutu (C); n-head'e tam bölünmeli")
+    ap.add_argument("--n-layer", type=int, help="Transformer blok sayısı")
+    ap.add_argument("--n-head", type=int, help="Dikkat kafası sayısı")
+    ap.add_argument("--block-size", type=int, help="Bağlam uzunluğu (karakter)")
+    ap.add_argument("--batch-size", type=int, help="Batch boyutu")
+    ap.add_argument("--lr", type=float, help="Varsayılan öğrenme oranı")
     args = ap.parse_args()
 
     cfg = dict(CONFIG, **BOYUTLAR[args.boyut])
+    for anahtar, deger in (("n_embd", args.n_embd), ("n_layer", args.n_layer), ("n_head", args.n_head),
+                           ("block_size", args.block_size), ("batch_size", args.batch_size),
+                           ("learning_rate", args.lr)):
+        if deger is not None:
+            cfg[anahtar] = deger
+    if min(cfg["n_embd"], cfg["n_layer"], cfg["n_head"], cfg["block_size"], cfg["batch_size"]) < 1:
+        ap.error("Model ayarları pozitif olmalı.")
+    if cfg["n_embd"] % cfg["n_head"]:
+        ap.error(f"--n-embd ({cfg['n_embd']}) --n-head ({cfg['n_head']}) sayısına tam bölünmeli.")
+    tahmini = 12 * cfg["n_layer"] * cfg["n_embd"] ** 2
+    print(f"Model: n_embd={cfg['n_embd']} n_head={cfg['n_head']} n_layer={cfg['n_layer']} "
+          f"block_size={cfg['block_size']} batch={cfg['batch_size']} lr={cfg['learning_rate']} "
+          f"(~{tahmini / 1e6:.1f}M parametre)", flush=True)
     motor = ElalemMotoru(cfg, FULLSTACK_DATA)
     if args.selftest:
         sys.exit(0 if self_test(motor, args.selftest_steps) else 1)

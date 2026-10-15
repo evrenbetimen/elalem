@@ -1,6 +1,8 @@
 # Elalem için sentetik form verisi üretir (istek -> form eşleşmesi öğretir).
 # Kullanım: python3 sentetik_form_uret.py > veri/elle/sentetik_formlar.txt
+#           python3 sentetik_form_uret.py 1500 > ...   (örnek sayısı, varsayılan 4000)
 import random
+import sys
 
 ALANLAR = {
     # anahtar: (prompt'taki adlar, id, tip, etiket)
@@ -67,5 +69,6 @@ def ornek(r):
 
 
 if __name__ == "__main__":
+    adet = int(sys.argv[1]) if len(sys.argv) > 1 else 4000
     r = random.Random(42)
-    print("".join(ornek(r) for _ in range(4000)), end="")
+    print("".join(ornek(r) for _ in range(adet)), end="")
