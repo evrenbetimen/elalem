@@ -1,0 +1,564 @@
+<|kullanici|> example.com'a giden bir link yap.
+<|elalem|>
+<a href="https://example.com">example.com</a>
+<|son|>
+<|kullanici|> Make a link to example.com.
+<|elalem|>
+<a href="https://example.com">example.com</a>
+<|son|>
+<|kullanici|> Bir giriş formu yap. link de olsun example.com'a
+<|elalem|>
+<form class="login-form" action="/api/giris" method="post">
+  <label for="email">E-posta</label>
+  <input id="email" type="email" name="email" placeholder="ornek@mail.com">
+  <label for="sifre">Şifre</label>
+  <input id="sifre" type="password" name="sifre">
+  <button class="btn btn-primary" type="submit">Giriş Yap</button>
+</form>
+<p>Hesabın yok mu? <a href="https://example.com">example.com</a></p>
+<|son|>
+<|kullanici|> Bir buton yap, tıklayınca example.com'a gitsin.
+<|elalem|>
+<a class="btn btn-primary" href="https://example.com">example.com adresine git</a>
+<|son|>
+<|kullanici|> Yeni sekmede açılan example.com linki yap.
+<|elalem|>
+<a href="https://example.com" target="_blank" rel="noopener">example.com</a>
+<|son|>
+<|kullanici|> Navigasyon menüsü yap, example.com linki olsun.
+<|elalem|>
+<nav class="navbar">
+  <a class="logo" href="/">Elalem</a>
+  <ul class="nav-links">
+    <li><a href="/">Ana Sayfa</a></li>
+    <li><a href="https://example.com">example.com</a></li>
+  </ul>
+</nav>
+<|son|>
+<|kullanici|> Bir kart yap, içinde example.com linki olsun.
+<|elalem|>
+<div class="card">
+  <div class="card-body">
+    <h2 class="card-title">example.com</h2>
+    <p class="card-text">Siteyi ziyaret et.</p>
+    <a class="btn" href="https://example.com">Git</a>
+  </div>
+</div>
+<|son|>
+<|kullanici|> google.com'a giden bir link yap.
+<|elalem|>
+<a href="https://www.google.com">google.com</a>
+<|son|>
+<|kullanici|> Make a link to google.com.
+<|elalem|>
+<a href="https://www.google.com">google.com</a>
+<|son|>
+<|kullanici|> Bir giriş formu yap. link de olsun google.com'a
+<|elalem|>
+<form class="login-form" action="/api/giris" method="post">
+  <label for="email">E-posta</label>
+  <input id="email" type="email" name="email" placeholder="ornek@mail.com">
+  <label for="sifre">Şifre</label>
+  <input id="sifre" type="password" name="sifre">
+  <button class="btn btn-primary" type="submit">Giriş Yap</button>
+</form>
+<p>Hesabın yok mu? <a href="https://www.google.com">google.com</a></p>
+<|son|>
+<|kullanici|> Bir buton yap, tıklayınca google.com'a gitsin.
+<|elalem|>
+<a class="btn btn-primary" href="https://www.google.com">google.com adresine git</a>
+<|son|>
+<|kullanici|> Yeni sekmede açılan google.com linki yap.
+<|elalem|>
+<a href="https://www.google.com" target="_blank" rel="noopener">google.com</a>
+<|son|>
+<|kullanici|> Navigasyon menüsü yap, google.com linki olsun.
+<|elalem|>
+<nav class="navbar">
+  <a class="logo" href="/">Elalem</a>
+  <ul class="nav-links">
+    <li><a href="/">Ana Sayfa</a></li>
+    <li><a href="https://www.google.com">google.com</a></li>
+  </ul>
+</nav>
+<|son|>
+<|kullanici|> Bir kart yap, içinde google.com linki olsun.
+<|elalem|>
+<div class="card">
+  <div class="card-body">
+    <h2 class="card-title">google.com</h2>
+    <p class="card-text">Siteyi ziyaret et.</p>
+    <a class="btn" href="https://www.google.com">Git</a>
+  </div>
+</div>
+<|son|>
+<|kullanici|> github.com'a giden bir link yap.
+<|elalem|>
+<a href="https://github.com">github.com</a>
+<|son|>
+<|kullanici|> Make a link to github.com.
+<|elalem|>
+<a href="https://github.com">github.com</a>
+<|son|>
+<|kullanici|> Bir giriş formu yap. link de olsun github.com'a
+<|elalem|>
+<form class="login-form" action="/api/giris" method="post">
+  <label for="email">E-posta</label>
+  <input id="email" type="email" name="email" placeholder="ornek@mail.com">
+  <label for="sifre">Şifre</label>
+  <input id="sifre" type="password" name="sifre">
+  <button class="btn btn-primary" type="submit">Giriş Yap</button>
+</form>
+<p>Hesabın yok mu? <a href="https://github.com">github.com</a></p>
+<|son|>
+<|kullanici|> Bir buton yap, tıklayınca github.com'a gitsin.
+<|elalem|>
+<a class="btn btn-primary" href="https://github.com">github.com adresine git</a>
+<|son|>
+<|kullanici|> Yeni sekmede açılan github.com linki yap.
+<|elalem|>
+<a href="https://github.com" target="_blank" rel="noopener">github.com</a>
+<|son|>
+<|kullanici|> Navigasyon menüsü yap, github.com linki olsun.
+<|elalem|>
+<nav class="navbar">
+  <a class="logo" href="/">Elalem</a>
+  <ul class="nav-links">
+    <li><a href="/">Ana Sayfa</a></li>
+    <li><a href="https://github.com">github.com</a></li>
+  </ul>
+</nav>
+<|son|>
+<|kullanici|> Bir kart yap, içinde github.com linki olsun.
+<|elalem|>
+<div class="card">
+  <div class="card-body">
+    <h2 class="card-title">github.com</h2>
+    <p class="card-text">Siteyi ziyaret et.</p>
+    <a class="btn" href="https://github.com">Git</a>
+  </div>
+</div>
+<|son|>
+<|kullanici|> w3schools.com'a giden bir link yap.
+<|elalem|>
+<a href="https://www.w3schools.com">w3schools.com</a>
+<|son|>
+<|kullanici|> Make a link to w3schools.com.
+<|elalem|>
+<a href="https://www.w3schools.com">w3schools.com</a>
+<|son|>
+<|kullanici|> Bir giriş formu yap. link de olsun w3schools.com'a
+<|elalem|>
+<form class="login-form" action="/api/giris" method="post">
+  <label for="email">E-posta</label>
+  <input id="email" type="email" name="email" placeholder="ornek@mail.com">
+  <label for="sifre">Şifre</label>
+  <input id="sifre" type="password" name="sifre">
+  <button class="btn btn-primary" type="submit">Giriş Yap</button>
+</form>
+<p>Hesabın yok mu? <a href="https://www.w3schools.com">w3schools.com</a></p>
+<|son|>
+<|kullanici|> Bir buton yap, tıklayınca w3schools.com'a gitsin.
+<|elalem|>
+<a class="btn btn-primary" href="https://www.w3schools.com">w3schools.com adresine git</a>
+<|son|>
+<|kullanici|> Yeni sekmede açılan w3schools.com linki yap.
+<|elalem|>
+<a href="https://www.w3schools.com" target="_blank" rel="noopener">w3schools.com</a>
+<|son|>
+<|kullanici|> Navigasyon menüsü yap, w3schools.com linki olsun.
+<|elalem|>
+<nav class="navbar">
+  <a class="logo" href="/">Elalem</a>
+  <ul class="nav-links">
+    <li><a href="/">Ana Sayfa</a></li>
+    <li><a href="https://www.w3schools.com">w3schools.com</a></li>
+  </ul>
+</nav>
+<|son|>
+<|kullanici|> Bir kart yap, içinde w3schools.com linki olsun.
+<|elalem|>
+<div class="card">
+  <div class="card-body">
+    <h2 class="card-title">w3schools.com</h2>
+    <p class="card-text">Siteyi ziyaret et.</p>
+    <a class="btn" href="https://www.w3schools.com">Git</a>
+  </div>
+</div>
+<|son|>
+<|kullanici|> example.com'a giden bir link yap.
+<|elalem|>
+<a href="https://example.com">example.com</a>
+<|son|>
+<|kullanici|> Make a link to example.com.
+<|elalem|>
+<a href="https://example.com">example.com</a>
+<|son|>
+<|kullanici|> Bir giriş formu yap. link de olsun example.com'a
+<|elalem|>
+<form class="login-form" action="/api/giris" method="post">
+  <label for="email">E-posta</label>
+  <input id="email" type="email" name="email" placeholder="ornek@mail.com">
+  <label for="sifre">Şifre</label>
+  <input id="sifre" type="password" name="sifre">
+  <button class="btn btn-primary" type="submit">Giriş Yap</button>
+</form>
+<p>Hesabın yok mu? <a href="https://example.com">example.com</a></p>
+<|son|>
+<|kullanici|> Bir buton yap, tıklayınca example.com'a gitsin.
+<|elalem|>
+<a class="btn btn-primary" href="https://example.com">example.com adresine git</a>
+<|son|>
+<|kullanici|> Yeni sekmede açılan example.com linki yap.
+<|elalem|>
+<a href="https://example.com" target="_blank" rel="noopener">example.com</a>
+<|son|>
+<|kullanici|> Navigasyon menüsü yap, example.com linki olsun.
+<|elalem|>
+<nav class="navbar">
+  <a class="logo" href="/">Elalem</a>
+  <ul class="nav-links">
+    <li><a href="/">Ana Sayfa</a></li>
+    <li><a href="https://example.com">example.com</a></li>
+  </ul>
+</nav>
+<|son|>
+<|kullanici|> Bir kart yap, içinde example.com linki olsun.
+<|elalem|>
+<div class="card">
+  <div class="card-body">
+    <h2 class="card-title">example.com</h2>
+    <p class="card-text">Siteyi ziyaret et.</p>
+    <a class="btn" href="https://example.com">Git</a>
+  </div>
+</div>
+<|son|>
+<|kullanici|> google.com'a giden bir link yap.
+<|elalem|>
+<a href="https://www.google.com">google.com</a>
+<|son|>
+<|kullanici|> Make a link to google.com.
+<|elalem|>
+<a href="https://www.google.com">google.com</a>
+<|son|>
+<|kullanici|> Bir giriş formu yap. link de olsun google.com'a
+<|elalem|>
+<form class="login-form" action="/api/giris" method="post">
+  <label for="email">E-posta</label>
+  <input id="email" type="email" name="email" placeholder="ornek@mail.com">
+  <label for="sifre">Şifre</label>
+  <input id="sifre" type="password" name="sifre">
+  <button class="btn btn-primary" type="submit">Giriş Yap</button>
+</form>
+<p>Hesabın yok mu? <a href="https://www.google.com">google.com</a></p>
+<|son|>
+<|kullanici|> Bir buton yap, tıklayınca google.com'a gitsin.
+<|elalem|>
+<a class="btn btn-primary" href="https://www.google.com">google.com adresine git</a>
+<|son|>
+<|kullanici|> Yeni sekmede açılan google.com linki yap.
+<|elalem|>
+<a href="https://www.google.com" target="_blank" rel="noopener">google.com</a>
+<|son|>
+<|kullanici|> Navigasyon menüsü yap, google.com linki olsun.
+<|elalem|>
+<nav class="navbar">
+  <a class="logo" href="/">Elalem</a>
+  <ul class="nav-links">
+    <li><a href="/">Ana Sayfa</a></li>
+    <li><a href="https://www.google.com">google.com</a></li>
+  </ul>
+</nav>
+<|son|>
+<|kullanici|> Bir kart yap, içinde google.com linki olsun.
+<|elalem|>
+<div class="card">
+  <div class="card-body">
+    <h2 class="card-title">google.com</h2>
+    <p class="card-text">Siteyi ziyaret et.</p>
+    <a class="btn" href="https://www.google.com">Git</a>
+  </div>
+</div>
+<|son|>
+<|kullanici|> github.com'a giden bir link yap.
+<|elalem|>
+<a href="https://github.com">github.com</a>
+<|son|>
+<|kullanici|> Make a link to github.com.
+<|elalem|>
+<a href="https://github.com">github.com</a>
+<|son|>
+<|kullanici|> Bir giriş formu yap. link de olsun github.com'a
+<|elalem|>
+<form class="login-form" action="/api/giris" method="post">
+  <label for="email">E-posta</label>
+  <input id="email" type="email" name="email" placeholder="ornek@mail.com">
+  <label for="sifre">Şifre</label>
+  <input id="sifre" type="password" name="sifre">
+  <button class="btn btn-primary" type="submit">Giriş Yap</button>
+</form>
+<p>Hesabın yok mu? <a href="https://github.com">github.com</a></p>
+<|son|>
+<|kullanici|> Bir buton yap, tıklayınca github.com'a gitsin.
+<|elalem|>
+<a class="btn btn-primary" href="https://github.com">github.com adresine git</a>
+<|son|>
+<|kullanici|> Yeni sekmede açılan github.com linki yap.
+<|elalem|>
+<a href="https://github.com" target="_blank" rel="noopener">github.com</a>
+<|son|>
+<|kullanici|> Navigasyon menüsü yap, github.com linki olsun.
+<|elalem|>
+<nav class="navbar">
+  <a class="logo" href="/">Elalem</a>
+  <ul class="nav-links">
+    <li><a href="/">Ana Sayfa</a></li>
+    <li><a href="https://github.com">github.com</a></li>
+  </ul>
+</nav>
+<|son|>
+<|kullanici|> Bir kart yap, içinde github.com linki olsun.
+<|elalem|>
+<div class="card">
+  <div class="card-body">
+    <h2 class="card-title">github.com</h2>
+    <p class="card-text">Siteyi ziyaret et.</p>
+    <a class="btn" href="https://github.com">Git</a>
+  </div>
+</div>
+<|son|>
+<|kullanici|> w3schools.com'a giden bir link yap.
+<|elalem|>
+<a href="https://www.w3schools.com">w3schools.com</a>
+<|son|>
+<|kullanici|> Make a link to w3schools.com.
+<|elalem|>
+<a href="https://www.w3schools.com">w3schools.com</a>
+<|son|>
+<|kullanici|> Bir giriş formu yap. link de olsun w3schools.com'a
+<|elalem|>
+<form class="login-form" action="/api/giris" method="post">
+  <label for="email">E-posta</label>
+  <input id="email" type="email" name="email" placeholder="ornek@mail.com">
+  <label for="sifre">Şifre</label>
+  <input id="sifre" type="password" name="sifre">
+  <button class="btn btn-primary" type="submit">Giriş Yap</button>
+</form>
+<p>Hesabın yok mu? <a href="https://www.w3schools.com">w3schools.com</a></p>
+<|son|>
+<|kullanici|> Bir buton yap, tıklayınca w3schools.com'a gitsin.
+<|elalem|>
+<a class="btn btn-primary" href="https://www.w3schools.com">w3schools.com adresine git</a>
+<|son|>
+<|kullanici|> Yeni sekmede açılan w3schools.com linki yap.
+<|elalem|>
+<a href="https://www.w3schools.com" target="_blank" rel="noopener">w3schools.com</a>
+<|son|>
+<|kullanici|> Navigasyon menüsü yap, w3schools.com linki olsun.
+<|elalem|>
+<nav class="navbar">
+  <a class="logo" href="/">Elalem</a>
+  <ul class="nav-links">
+    <li><a href="/">Ana Sayfa</a></li>
+    <li><a href="https://www.w3schools.com">w3schools.com</a></li>
+  </ul>
+</nav>
+<|son|>
+<|kullanici|> Bir kart yap, içinde w3schools.com linki olsun.
+<|elalem|>
+<div class="card">
+  <div class="card-body">
+    <h2 class="card-title">w3schools.com</h2>
+    <p class="card-text">Siteyi ziyaret et.</p>
+    <a class="btn" href="https://www.w3schools.com">Git</a>
+  </div>
+</div>
+<|son|>
+<|kullanici|> example.com'a giden bir link yap.
+<|elalem|>
+<a href="https://example.com">example.com</a>
+<|son|>
+<|kullanici|> Make a link to example.com.
+<|elalem|>
+<a href="https://example.com">example.com</a>
+<|son|>
+<|kullanici|> Bir giriş formu yap. link de olsun example.com'a
+<|elalem|>
+<form class="login-form" action="/api/giris" method="post">
+  <label for="email">E-posta</label>
+  <input id="email" type="email" name="email" placeholder="ornek@mail.com">
+  <label for="sifre">Şifre</label>
+  <input id="sifre" type="password" name="sifre">
+  <button class="btn btn-primary" type="submit">Giriş Yap</button>
+</form>
+<p>Hesabın yok mu? <a href="https://example.com">example.com</a></p>
+<|son|>
+<|kullanici|> Bir buton yap, tıklayınca example.com'a gitsin.
+<|elalem|>
+<a class="btn btn-primary" href="https://example.com">example.com adresine git</a>
+<|son|>
+<|kullanici|> Yeni sekmede açılan example.com linki yap.
+<|elalem|>
+<a href="https://example.com" target="_blank" rel="noopener">example.com</a>
+<|son|>
+<|kullanici|> Navigasyon menüsü yap, example.com linki olsun.
+<|elalem|>
+<nav class="navbar">
+  <a class="logo" href="/">Elalem</a>
+  <ul class="nav-links">
+    <li><a href="/">Ana Sayfa</a></li>
+    <li><a href="https://example.com">example.com</a></li>
+  </ul>
+</nav>
+<|son|>
+<|kullanici|> Bir kart yap, içinde example.com linki olsun.
+<|elalem|>
+<div class="card">
+  <div class="card-body">
+    <h2 class="card-title">example.com</h2>
+    <p class="card-text">Siteyi ziyaret et.</p>
+    <a class="btn" href="https://example.com">Git</a>
+  </div>
+</div>
+<|son|>
+<|kullanici|> google.com'a giden bir link yap.
+<|elalem|>
+<a href="https://www.google.com">google.com</a>
+<|son|>
+<|kullanici|> Make a link to google.com.
+<|elalem|>
+<a href="https://www.google.com">google.com</a>
+<|son|>
+<|kullanici|> Bir giriş formu yap. link de olsun google.com'a
+<|elalem|>
+<form class="login-form" action="/api/giris" method="post">
+  <label for="email">E-posta</label>
+  <input id="email" type="email" name="email" placeholder="ornek@mail.com">
+  <label for="sifre">Şifre</label>
+  <input id="sifre" type="password" name="sifre">
+  <button class="btn btn-primary" type="submit">Giriş Yap</button>
+</form>
+<p>Hesabın yok mu? <a href="https://www.google.com">google.com</a></p>
+<|son|>
+<|kullanici|> Bir buton yap, tıklayınca google.com'a gitsin.
+<|elalem|>
+<a class="btn btn-primary" href="https://www.google.com">google.com adresine git</a>
+<|son|>
+<|kullanici|> Yeni sekmede açılan google.com linki yap.
+<|elalem|>
+<a href="https://www.google.com" target="_blank" rel="noopener">google.com</a>
+<|son|>
+<|kullanici|> Navigasyon menüsü yap, google.com linki olsun.
+<|elalem|>
+<nav class="navbar">
+  <a class="logo" href="/">Elalem</a>
+  <ul class="nav-links">
+    <li><a href="/">Ana Sayfa</a></li>
+    <li><a href="https://www.google.com">google.com</a></li>
+  </ul>
+</nav>
+<|son|>
+<|kullanici|> Bir kart yap, içinde google.com linki olsun.
+<|elalem|>
+<div class="card">
+  <div class="card-body">
+    <h2 class="card-title">google.com</h2>
+    <p class="card-text">Siteyi ziyaret et.</p>
+    <a class="btn" href="https://www.google.com">Git</a>
+  </div>
+</div>
+<|son|>
+<|kullanici|> github.com'a giden bir link yap.
+<|elalem|>
+<a href="https://github.com">github.com</a>
+<|son|>
+<|kullanici|> Make a link to github.com.
+<|elalem|>
+<a href="https://github.com">github.com</a>
+<|son|>
+<|kullanici|> Bir giriş formu yap. link de olsun github.com'a
+<|elalem|>
+<form class="login-form" action="/api/giris" method="post">
+  <label for="email">E-posta</label>
+  <input id="email" type="email" name="email" placeholder="ornek@mail.com">
+  <label for="sifre">Şifre</label>
+  <input id="sifre" type="password" name="sifre">
+  <button class="btn btn-primary" type="submit">Giriş Yap</button>
+</form>
+<p>Hesabın yok mu? <a href="https://github.com">github.com</a></p>
+<|son|>
+<|kullanici|> Bir buton yap, tıklayınca github.com'a gitsin.
+<|elalem|>
+<a class="btn btn-primary" href="https://github.com">github.com adresine git</a>
+<|son|>
+<|kullanici|> Yeni sekmede açılan github.com linki yap.
+<|elalem|>
+<a href="https://github.com" target="_blank" rel="noopener">github.com</a>
+<|son|>
+<|kullanici|> Navigasyon menüsü yap, github.com linki olsun.
+<|elalem|>
+<nav class="navbar">
+  <a class="logo" href="/">Elalem</a>
+  <ul class="nav-links">
+    <li><a href="/">Ana Sayfa</a></li>
+    <li><a href="https://github.com">github.com</a></li>
+  </ul>
+</nav>
+<|son|>
+<|kullanici|> Bir kart yap, içinde github.com linki olsun.
+<|elalem|>
+<div class="card">
+  <div class="card-body">
+    <h2 class="card-title">github.com</h2>
+    <p class="card-text">Siteyi ziyaret et.</p>
+    <a class="btn" href="https://github.com">Git</a>
+  </div>
+</div>
+<|son|>
+<|kullanici|> w3schools.com'a giden bir link yap.
+<|elalem|>
+<a href="https://www.w3schools.com">w3schools.com</a>
+<|son|>
+<|kullanici|> Make a link to w3schools.com.
+<|elalem|>
+<a href="https://www.w3schools.com">w3schools.com</a>
+<|son|>
+<|kullanici|> Bir giriş formu yap. link de olsun w3schools.com'a
+<|elalem|>
+<form class="login-form" action="/api/giris" method="post">
+  <label for="email">E-posta</label>
+  <input id="email" type="email" name="email" placeholder="ornek@mail.com">
+  <label for="sifre">Şifre</label>
+  <input id="sifre" type="password" name="sifre">
+  <button class="btn btn-primary" type="submit">Giriş Yap</button>
+</form>
+<p>Hesabın yok mu? <a href="https://www.w3schools.com">w3schools.com</a></p>
+<|son|>
+<|kullanici|> Bir buton yap, tıklayınca w3schools.com'a gitsin.
+<|elalem|>
+<a class="btn btn-primary" href="https://www.w3schools.com">w3schools.com adresine git</a>
+<|son|>
+<|kullanici|> Yeni sekmede açılan w3schools.com linki yap.
+<|elalem|>
+<a href="https://www.w3schools.com" target="_blank" rel="noopener">w3schools.com</a>
+<|son|>
+<|kullanici|> Navigasyon menüsü yap, w3schools.com linki olsun.
+<|elalem|>
+<nav class="navbar">
+  <a class="logo" href="/">Elalem</a>
+  <ul class="nav-links">
+    <li><a href="/">Ana Sayfa</a></li>
+    <li><a href="https://www.w3schools.com">w3schools.com</a></li>
+  </ul>
+</nav>
+<|son|>
+<|kullanici|> Bir kart yap, içinde w3schools.com linki olsun.
+<|elalem|>
+<div class="card">
+  <div class="card-body">
+    <h2 class="card-title">w3schools.com</h2>
+    <p class="card-text">Siteyi ziyaret et.</p>
+    <a class="btn" href="https://www.w3schools.com">Git</a>
+  </div>
+</div>
+<|son|>

@@ -1,0 +1,396 @@
+<|kullanici|> HTML nedir?
+<|elalem|>
+HTML, web sayfalarının iskeletini oluşturan işaretleme dilidir. Sayfadaki başlıkları, paragrafları, resimleri ve bağlantıları etiketlerle tanımlar. Tarayıcı bu etiketleri okuyarak sayfayı ekranda gösterir.
+<|son|>
+<|kullanici|> CSS nedir?
+<|elalem|>
+CSS, web sayfalarının görünümünü belirleyen stil dilidir. Renkleri, yazı tiplerini, boşlukları ve yerleşimi CSS ile ayarlarız. HTML sayfanın ne içerdiğini, CSS ise nasıl göründüğünü söyler.
+<|son|>
+<|kullanici|> JavaScript nedir?
+<|elalem|>
+JavaScript, web sayfalarına hareket ve etkileşim kazandıran programlama dilidir. Bir butona tıklandığında mesaj göstermek, formu kontrol etmek ya da sunucudan veri çekmek JavaScript ile yapılır.
+<|son|>
+<|kullanici|> Python nedir?
+<|elalem|>
+Python, okunması kolay ve çok yönlü bir programlama dilidir. Web sunucuları, veri analizi, otomasyon ve yapay zeka gibi pek çok alanda kullanılır. Girintiler kodun bloklarını belirler, bu yüzden düzenli yazmak önemlidir.
+<|son|>
+<|kullanici|> Frontend ve backend arasındaki fark nedir?
+<|elalem|>
+Frontend, kullanıcının tarayıcıda gördüğü ve etkileşime girdiği kısımdır; HTML, CSS ve JavaScript ile yazılır. Backend ise sunucuda çalışan, veriyi saklayan ve işleyen kısımdır; Python gibi dillerle yazılır. İkisi birbirleriyle API üzerinden haberleşir.
+<|son|>
+<|kullanici|> API nedir?
+<|elalem|>
+API, iki yazılımın birbiriyle konuşmasını sağlayan bir arayüzdür. Örneğin bir web sayfası, kullanıcı listesini almak için sunucudaki bir API adresine istek gönderir ve cevabı genellikle JSON biçiminde alır.
+<|son|>
+<|kullanici|> JSON nedir?
+<|elalem|>
+JSON, verileri anahtar ve değer çiftleriyle saklayan hafif bir metin biçimidir. Hem insanlar hem de bilgisayarlar kolayca okuyabilir. Web uygulamalarında frontend ile backend arasında veri taşımak için en sık kullanılan biçimdir.
+<|son|>
+<|kullanici|> Bir link nasıl yapılır?
+<|elalem|>
+Link yapmak için a etiketi kullanılır. Gidilecek adres href özelliğine yazılır, etiketin içine de kullanıcının göreceği metin konur. Linkin yeni sekmede açılmasını istersen target özelliğine blank değerini verebilirsin.
+<|son|>
+<|kullanici|> Bir giriş formu nasıl yapılır?
+<|elalem|>
+Giriş formu için önce form etiketi açılır ve verinin gönderileceği adres action özelliğine yazılır. İçine e-posta ve şifre için iki input alanı, her birinin üstüne de açıklayıcı bir label eklenir. En sona submit tipinde bir buton koyarak formu tamamlarsın.
+<|son|>
+<|kullanici|> Responsive tasarım nedir?
+<|elalem|>
+Responsive tasarım, bir web sayfasının telefon, tablet ve bilgisayar gibi farklı ekran boyutlarına kendini uydurmasıdır. Bunu genellikle CSS'teki media query kuralları ve esnek grid yapılarıyla sağlarız.
+<|son|>
+<|kullanici|> Flexbox ne işe yarar?
+<|elalem|>
+Flexbox, öğeleri bir satır ya da sütun boyunca kolayca hizalamak için kullanılan bir CSS düzenidir. Kapsayıcıya display flex verildiğinde, içindeki öğeleri ortalamak, aralarına eşit boşluk koymak ya da sıralarını değiştirmek çok kolaylaşır.
+<|son|>
+<|kullanici|> Grid ile flexbox arasındaki fark nedir?
+<|elalem|>
+Flexbox tek boyutlu düzenler için idealdir, yani öğeleri ya yatayda ya da dikeyde dizer. Grid ise iki boyutludur; satırları ve sütunları aynı anda kontrol eder. Sayfa iskeleti için grid, bir menü ya da buton grubu için flexbox daha uygundur.
+<|son|>
+<|kullanici|> Class ile id arasındaki fark nedir?
+<|elalem|>
+Class, aynı stili birden fazla öğeye vermek için kullanılır ve bir sayfada istediğin kadar tekrar edebilir. Id ise bir öğeyi benzersiz olarak tanımlar ve sayfada sadece bir kez kullanılmalıdır.
+<|son|>
+<|kullanici|> Değişken nedir?
+<|elalem|>
+Değişken, bir değeri saklamak için ona verdiğimiz isimdir. Örneğin kullanıcının adını ya da bir sayacın değerini değişkende tutarız. Program çalıştıkça değişkenin değeri değişebilir, adı da buradan gelir.
+<|son|>
+<|kullanici|> Fonksiyon nedir?
+<|elalem|>
+Fonksiyon, belirli bir işi yapan ve tekrar tekrar çağrılabilen kod parçasıdır. Girdi olarak parametre alabilir ve bir sonuç döndürebilir. Aynı işlemi her seferinde baştan yazmak yerine bir fonksiyona koymak kodu düzenli ve kısa tutar.
+<|son|>
+<|kullanici|> Döngü nedir?
+<|elalem|>
+Döngü, bir işlemi belirli bir koşul sağlandığı sürece ya da bir listedeki her eleman için tekrar etmeyi sağlar. Python'da for döngüsüyle bir listenin her elemanını sırayla işleyebilir, while döngüsüyle bir koşul doğru kaldıkça devam edebilirsin.
+<|son|>
+<|kullanici|> Hata ayıklama nasıl yapılır?
+<|elalem|>
+Hata ayıklarken önce hata mesajını dikkatle okumak gerekir, çünkü genellikle sorunun hangi satırda olduğunu söyler. Sonra şüpheli yerlerde değişkenlerin değerlerini yazdırarak neyin beklenmedik olduğunu bulursun. Sorunu küçük parçalara bölmek çözümü hızlandırır.
+<|son|>
+<|kullanici|> Veritabanı nedir?
+<|elalem|>
+Veritabanı, verileri düzenli bir şekilde saklayan ve hızlıca bulmamızı sağlayan sistemdir. Kullanıcı hesapları, ürünler ya da siparişler gibi bilgiler veritabanında tutulur. Backend bu verileri okuyup yazarak uygulamayı çalıştırır.
+<|son|>
+<|kullanici|> HTTP nedir?
+<|elalem|>
+HTTP, tarayıcı ile sunucu arasındaki iletişim kuralıdır. Tarayıcı bir sayfa istediğinde sunucuya GET isteği gönderir, bir form gönderildiğinde ise genellikle POST isteği kullanılır. Sunucu da cevabıyla birlikte bir durum kodu döndürür.
+<|son|>
+<|kullanici|> 404 hatası ne demek?
+<|elalem|>
+404, istenen sayfanın sunucuda bulunamadığı anlamına gelir. Genellikle adres yanlış yazıldığında ya da sayfa kaldırıldığında görülür. Kullanıcıya dostça bir 404 sayfası göstermek iyi bir deneyim sağlar.
+<|son|>
+<|kullanici|> İyi bir web sitesi nasıl olmalı?
+<|elalem|>
+İyi bir web sitesi hızlı açılır, her ekranda düzgün görünür ve kullanıcının aradığını kolayca bulmasını sağlar. Okunaklı yazılar, yeterli renk karşıtlığı ve sade bir menü önemlidir. Erişilebilirlik için resimlere açıklama eklemeyi unutmamak gerekir.
+<|son|>
+<|kullanici|> Koyu tema neden tercih edilir?
+<|elalem|>
+Koyu tema, özellikle karanlık ortamlarda gözü daha az yorar ve bazı ekranlarda pil tasarrufu sağlar. Ancak yazı ile arka plan arasında yeterli karşıtlık olmalıdır, yoksa okumak zorlaşır.
+<|son|>
+<|kullanici|> Yapay zeka nedir?
+<|elalem|>
+Yapay zeka, bilgisayarların öğrenme, anlama ve karar verme gibi insana özgü görevleri yerine getirmesini sağlayan alandır. Dil modelleri, büyük miktarda metinden kalıplar öğrenerek yeni metinler üretir.
+<|son|>
+<|kullanici|> Dil modeli nasıl çalışır?
+<|elalem|>
+Bir dil modeli, kendisine verilen metne bakarak bir sonraki karakteri ya da kelimeyi tahmin eder. Bu tahmini tekrar tekrar yaparak cümleler kurar. Ne kadar çok ve kaliteli veriyle eğitilirse tahminleri o kadar anlamlı olur.
+<|son|>
+<|kullanici|> Sen nasıl öğreniyorsun?
+<|elalem|>
+Ben karakter seviyesinde çalışan küçük bir dil modeliyim. Eğitim sırasında metindeki her karakterden sonra hangi karakterin geleceğini tahmin etmeye çalışırım. Yanıldığımda hata değerim yükselir ve ağırlıklarım bu hatayı azaltacak yönde güncellenir.
+<|son|>
+<|kullanici|> Loss değeri ne anlama geliyor?
+<|elalem|>
+Loss, modelin tahminlerinin ne kadar yanlış olduğunu gösteren sayıdır. Eğitim ilerledikçe bu değerin düşmesi beklenir. Eğitim loss değeri düşerken doğrulama loss değeri yükselmeye başlarsa model veriyi ezberlemeye başlamış demektir.
+<|son|>
+<|kullanici|> Transformer nedir?
+<|elalem|>
+Transformer, dikkat mekanizması üzerine kurulu bir sinir ağı mimarisidir. Her kelimenin ya da karakterin, metindeki diğer parçalarla ne kadar ilgili olduğunu hesaplar. Bugünkü büyük dil modellerinin çoğu bu mimariyi kullanır.
+<|son|>
+<|kullanici|> Nasılsın?
+<|elalem|>
+İyiyim, teşekkür ederim! Sana HTML, CSS, JavaScript ya da Python hakkında yardımcı olmaya hazırım. Ne öğrenmek istersin?
+<|son|>
+<|kullanici|> Bana bir tavsiye ver.
+<|elalem|>
+Yazılım öğrenirken küçük projelerle başla ve her gün biraz kod yaz. Bir şeyi okumak yerine kendin deneyerek öğrendiğinde çok daha kalıcı olur. Takıldığında hata mesajını okumaktan korkma, genellikle çözümün ipucunu verir.
+<|son|>
+<|kullanici|> Kod yazmaya nereden başlamalıyım?
+<|elalem|>
+Önce HTML ile basit bir sayfa yapmayı öğren, sonra CSS ile onu güzelleştir. Ardından JavaScript ile sayfaya etkileşim ekle. Bu üçünü öğrendikten sonra Python ile backend tarafına geçebilirsin.
+<|son|>
+<|kullanici|> What is HTML?
+<|elalem|>
+HTML is the markup language that builds the structure of web pages. It describes headings, paragraphs, images and links with tags, and the browser reads these tags to display the page.
+<|son|>
+<|kullanici|> What is CSS?
+<|elalem|>
+CSS is the style language that controls how a web page looks. Colors, fonts, spacing and layout are all defined with CSS, while HTML defines what the page contains.
+<|son|>
+<|kullanici|> How are you?
+<|elalem|>
+I am fine, thank you! I am ready to help you with HTML, CSS, JavaScript or Python. What would you like to learn?
+<|son|>
+<|kullanici|> HTML nedir?
+<|elalem|>
+HTML, web sayfalarının iskeletini oluşturan işaretleme dilidir. Sayfadaki başlıkları, paragrafları, resimleri ve bağlantıları etiketlerle tanımlar. Tarayıcı bu etiketleri okuyarak sayfayı ekranda gösterir.
+<|son|>
+<|kullanici|> CSS nedir?
+<|elalem|>
+CSS, web sayfalarının görünümünü belirleyen stil dilidir. Renkleri, yazı tiplerini, boşlukları ve yerleşimi CSS ile ayarlarız. HTML sayfanın ne içerdiğini, CSS ise nasıl göründüğünü söyler.
+<|son|>
+<|kullanici|> JavaScript nedir?
+<|elalem|>
+JavaScript, web sayfalarına hareket ve etkileşim kazandıran programlama dilidir. Bir butona tıklandığında mesaj göstermek, formu kontrol etmek ya da sunucudan veri çekmek JavaScript ile yapılır.
+<|son|>
+<|kullanici|> Python nedir?
+<|elalem|>
+Python, okunması kolay ve çok yönlü bir programlama dilidir. Web sunucuları, veri analizi, otomasyon ve yapay zeka gibi pek çok alanda kullanılır. Girintiler kodun bloklarını belirler, bu yüzden düzenli yazmak önemlidir.
+<|son|>
+<|kullanici|> Frontend ve backend arasındaki fark nedir?
+<|elalem|>
+Frontend, kullanıcının tarayıcıda gördüğü ve etkileşime girdiği kısımdır; HTML, CSS ve JavaScript ile yazılır. Backend ise sunucuda çalışan, veriyi saklayan ve işleyen kısımdır; Python gibi dillerle yazılır. İkisi birbirleriyle API üzerinden haberleşir.
+<|son|>
+<|kullanici|> API nedir?
+<|elalem|>
+API, iki yazılımın birbiriyle konuşmasını sağlayan bir arayüzdür. Örneğin bir web sayfası, kullanıcı listesini almak için sunucudaki bir API adresine istek gönderir ve cevabı genellikle JSON biçiminde alır.
+<|son|>
+<|kullanici|> JSON nedir?
+<|elalem|>
+JSON, verileri anahtar ve değer çiftleriyle saklayan hafif bir metin biçimidir. Hem insanlar hem de bilgisayarlar kolayca okuyabilir. Web uygulamalarında frontend ile backend arasında veri taşımak için en sık kullanılan biçimdir.
+<|son|>
+<|kullanici|> Bir link nasıl yapılır?
+<|elalem|>
+Link yapmak için a etiketi kullanılır. Gidilecek adres href özelliğine yazılır, etiketin içine de kullanıcının göreceği metin konur. Linkin yeni sekmede açılmasını istersen target özelliğine blank değerini verebilirsin.
+<|son|>
+<|kullanici|> Bir giriş formu nasıl yapılır?
+<|elalem|>
+Giriş formu için önce form etiketi açılır ve verinin gönderileceği adres action özelliğine yazılır. İçine e-posta ve şifre için iki input alanı, her birinin üstüne de açıklayıcı bir label eklenir. En sona submit tipinde bir buton koyarak formu tamamlarsın.
+<|son|>
+<|kullanici|> Responsive tasarım nedir?
+<|elalem|>
+Responsive tasarım, bir web sayfasının telefon, tablet ve bilgisayar gibi farklı ekran boyutlarına kendini uydurmasıdır. Bunu genellikle CSS'teki media query kuralları ve esnek grid yapılarıyla sağlarız.
+<|son|>
+<|kullanici|> Flexbox ne işe yarar?
+<|elalem|>
+Flexbox, öğeleri bir satır ya da sütun boyunca kolayca hizalamak için kullanılan bir CSS düzenidir. Kapsayıcıya display flex verildiğinde, içindeki öğeleri ortalamak, aralarına eşit boşluk koymak ya da sıralarını değiştirmek çok kolaylaşır.
+<|son|>
+<|kullanici|> Grid ile flexbox arasındaki fark nedir?
+<|elalem|>
+Flexbox tek boyutlu düzenler için idealdir, yani öğeleri ya yatayda ya da dikeyde dizer. Grid ise iki boyutludur; satırları ve sütunları aynı anda kontrol eder. Sayfa iskeleti için grid, bir menü ya da buton grubu için flexbox daha uygundur.
+<|son|>
+<|kullanici|> Class ile id arasındaki fark nedir?
+<|elalem|>
+Class, aynı stili birden fazla öğeye vermek için kullanılır ve bir sayfada istediğin kadar tekrar edebilir. Id ise bir öğeyi benzersiz olarak tanımlar ve sayfada sadece bir kez kullanılmalıdır.
+<|son|>
+<|kullanici|> Değişken nedir?
+<|elalem|>
+Değişken, bir değeri saklamak için ona verdiğimiz isimdir. Örneğin kullanıcının adını ya da bir sayacın değerini değişkende tutarız. Program çalıştıkça değişkenin değeri değişebilir, adı da buradan gelir.
+<|son|>
+<|kullanici|> Fonksiyon nedir?
+<|elalem|>
+Fonksiyon, belirli bir işi yapan ve tekrar tekrar çağrılabilen kod parçasıdır. Girdi olarak parametre alabilir ve bir sonuç döndürebilir. Aynı işlemi her seferinde baştan yazmak yerine bir fonksiyona koymak kodu düzenli ve kısa tutar.
+<|son|>
+<|kullanici|> Döngü nedir?
+<|elalem|>
+Döngü, bir işlemi belirli bir koşul sağlandığı sürece ya da bir listedeki her eleman için tekrar etmeyi sağlar. Python'da for döngüsüyle bir listenin her elemanını sırayla işleyebilir, while döngüsüyle bir koşul doğru kaldıkça devam edebilirsin.
+<|son|>
+<|kullanici|> Hata ayıklama nasıl yapılır?
+<|elalem|>
+Hata ayıklarken önce hata mesajını dikkatle okumak gerekir, çünkü genellikle sorunun hangi satırda olduğunu söyler. Sonra şüpheli yerlerde değişkenlerin değerlerini yazdırarak neyin beklenmedik olduğunu bulursun. Sorunu küçük parçalara bölmek çözümü hızlandırır.
+<|son|>
+<|kullanici|> Veritabanı nedir?
+<|elalem|>
+Veritabanı, verileri düzenli bir şekilde saklayan ve hızlıca bulmamızı sağlayan sistemdir. Kullanıcı hesapları, ürünler ya da siparişler gibi bilgiler veritabanında tutulur. Backend bu verileri okuyup yazarak uygulamayı çalıştırır.
+<|son|>
+<|kullanici|> HTTP nedir?
+<|elalem|>
+HTTP, tarayıcı ile sunucu arasındaki iletişim kuralıdır. Tarayıcı bir sayfa istediğinde sunucuya GET isteği gönderir, bir form gönderildiğinde ise genellikle POST isteği kullanılır. Sunucu da cevabıyla birlikte bir durum kodu döndürür.
+<|son|>
+<|kullanici|> 404 hatası ne demek?
+<|elalem|>
+404, istenen sayfanın sunucuda bulunamadığı anlamına gelir. Genellikle adres yanlış yazıldığında ya da sayfa kaldırıldığında görülür. Kullanıcıya dostça bir 404 sayfası göstermek iyi bir deneyim sağlar.
+<|son|>
+<|kullanici|> İyi bir web sitesi nasıl olmalı?
+<|elalem|>
+İyi bir web sitesi hızlı açılır, her ekranda düzgün görünür ve kullanıcının aradığını kolayca bulmasını sağlar. Okunaklı yazılar, yeterli renk karşıtlığı ve sade bir menü önemlidir. Erişilebilirlik için resimlere açıklama eklemeyi unutmamak gerekir.
+<|son|>
+<|kullanici|> Koyu tema neden tercih edilir?
+<|elalem|>
+Koyu tema, özellikle karanlık ortamlarda gözü daha az yorar ve bazı ekranlarda pil tasarrufu sağlar. Ancak yazı ile arka plan arasında yeterli karşıtlık olmalıdır, yoksa okumak zorlaşır.
+<|son|>
+<|kullanici|> Yapay zeka nedir?
+<|elalem|>
+Yapay zeka, bilgisayarların öğrenme, anlama ve karar verme gibi insana özgü görevleri yerine getirmesini sağlayan alandır. Dil modelleri, büyük miktarda metinden kalıplar öğrenerek yeni metinler üretir.
+<|son|>
+<|kullanici|> Dil modeli nasıl çalışır?
+<|elalem|>
+Bir dil modeli, kendisine verilen metne bakarak bir sonraki karakteri ya da kelimeyi tahmin eder. Bu tahmini tekrar tekrar yaparak cümleler kurar. Ne kadar çok ve kaliteli veriyle eğitilirse tahminleri o kadar anlamlı olur.
+<|son|>
+<|kullanici|> Sen nasıl öğreniyorsun?
+<|elalem|>
+Ben karakter seviyesinde çalışan küçük bir dil modeliyim. Eğitim sırasında metindeki her karakterden sonra hangi karakterin geleceğini tahmin etmeye çalışırım. Yanıldığımda hata değerim yükselir ve ağırlıklarım bu hatayı azaltacak yönde güncellenir.
+<|son|>
+<|kullanici|> Loss değeri ne anlama geliyor?
+<|elalem|>
+Loss, modelin tahminlerinin ne kadar yanlış olduğunu gösteren sayıdır. Eğitim ilerledikçe bu değerin düşmesi beklenir. Eğitim loss değeri düşerken doğrulama loss değeri yükselmeye başlarsa model veriyi ezberlemeye başlamış demektir.
+<|son|>
+<|kullanici|> Transformer nedir?
+<|elalem|>
+Transformer, dikkat mekanizması üzerine kurulu bir sinir ağı mimarisidir. Her kelimenin ya da karakterin, metindeki diğer parçalarla ne kadar ilgili olduğunu hesaplar. Bugünkü büyük dil modellerinin çoğu bu mimariyi kullanır.
+<|son|>
+<|kullanici|> Nasılsın?
+<|elalem|>
+İyiyim, teşekkür ederim! Sana HTML, CSS, JavaScript ya da Python hakkında yardımcı olmaya hazırım. Ne öğrenmek istersin?
+<|son|>
+<|kullanici|> Bana bir tavsiye ver.
+<|elalem|>
+Yazılım öğrenirken küçük projelerle başla ve her gün biraz kod yaz. Bir şeyi okumak yerine kendin deneyerek öğrendiğinde çok daha kalıcı olur. Takıldığında hata mesajını okumaktan korkma, genellikle çözümün ipucunu verir.
+<|son|>
+<|kullanici|> Kod yazmaya nereden başlamalıyım?
+<|elalem|>
+Önce HTML ile basit bir sayfa yapmayı öğren, sonra CSS ile onu güzelleştir. Ardından JavaScript ile sayfaya etkileşim ekle. Bu üçünü öğrendikten sonra Python ile backend tarafına geçebilirsin.
+<|son|>
+<|kullanici|> What is HTML?
+<|elalem|>
+HTML is the markup language that builds the structure of web pages. It describes headings, paragraphs, images and links with tags, and the browser reads these tags to display the page.
+<|son|>
+<|kullanici|> What is CSS?
+<|elalem|>
+CSS is the style language that controls how a web page looks. Colors, fonts, spacing and layout are all defined with CSS, while HTML defines what the page contains.
+<|son|>
+<|kullanici|> How are you?
+<|elalem|>
+I am fine, thank you! I am ready to help you with HTML, CSS, JavaScript or Python. What would you like to learn?
+<|son|>
+<|kullanici|> HTML nedir?
+<|elalem|>
+HTML, web sayfalarının iskeletini oluşturan işaretleme dilidir. Sayfadaki başlıkları, paragrafları, resimleri ve bağlantıları etiketlerle tanımlar. Tarayıcı bu etiketleri okuyarak sayfayı ekranda gösterir.
+<|son|>
+<|kullanici|> CSS nedir?
+<|elalem|>
+CSS, web sayfalarının görünümünü belirleyen stil dilidir. Renkleri, yazı tiplerini, boşlukları ve yerleşimi CSS ile ayarlarız. HTML sayfanın ne içerdiğini, CSS ise nasıl göründüğünü söyler.
+<|son|>
+<|kullanici|> JavaScript nedir?
+<|elalem|>
+JavaScript, web sayfalarına hareket ve etkileşim kazandıran programlama dilidir. Bir butona tıklandığında mesaj göstermek, formu kontrol etmek ya da sunucudan veri çekmek JavaScript ile yapılır.
+<|son|>
+<|kullanici|> Python nedir?
+<|elalem|>
+Python, okunması kolay ve çok yönlü bir programlama dilidir. Web sunucuları, veri analizi, otomasyon ve yapay zeka gibi pek çok alanda kullanılır. Girintiler kodun bloklarını belirler, bu yüzden düzenli yazmak önemlidir.
+<|son|>
+<|kullanici|> Frontend ve backend arasındaki fark nedir?
+<|elalem|>
+Frontend, kullanıcının tarayıcıda gördüğü ve etkileşime girdiği kısımdır; HTML, CSS ve JavaScript ile yazılır. Backend ise sunucuda çalışan, veriyi saklayan ve işleyen kısımdır; Python gibi dillerle yazılır. İkisi birbirleriyle API üzerinden haberleşir.
+<|son|>
+<|kullanici|> API nedir?
+<|elalem|>
+API, iki yazılımın birbiriyle konuşmasını sağlayan bir arayüzdür. Örneğin bir web sayfası, kullanıcı listesini almak için sunucudaki bir API adresine istek gönderir ve cevabı genellikle JSON biçiminde alır.
+<|son|>
+<|kullanici|> JSON nedir?
+<|elalem|>
+JSON, verileri anahtar ve değer çiftleriyle saklayan hafif bir metin biçimidir. Hem insanlar hem de bilgisayarlar kolayca okuyabilir. Web uygulamalarında frontend ile backend arasında veri taşımak için en sık kullanılan biçimdir.
+<|son|>
+<|kullanici|> Bir link nasıl yapılır?
+<|elalem|>
+Link yapmak için a etiketi kullanılır. Gidilecek adres href özelliğine yazılır, etiketin içine de kullanıcının göreceği metin konur. Linkin yeni sekmede açılmasını istersen target özelliğine blank değerini verebilirsin.
+<|son|>
+<|kullanici|> Bir giriş formu nasıl yapılır?
+<|elalem|>
+Giriş formu için önce form etiketi açılır ve verinin gönderileceği adres action özelliğine yazılır. İçine e-posta ve şifre için iki input alanı, her birinin üstüne de açıklayıcı bir label eklenir. En sona submit tipinde bir buton koyarak formu tamamlarsın.
+<|son|>
+<|kullanici|> Responsive tasarım nedir?
+<|elalem|>
+Responsive tasarım, bir web sayfasının telefon, tablet ve bilgisayar gibi farklı ekran boyutlarına kendini uydurmasıdır. Bunu genellikle CSS'teki media query kuralları ve esnek grid yapılarıyla sağlarız.
+<|son|>
+<|kullanici|> Flexbox ne işe yarar?
+<|elalem|>
+Flexbox, öğeleri bir satır ya da sütun boyunca kolayca hizalamak için kullanılan bir CSS düzenidir. Kapsayıcıya display flex verildiğinde, içindeki öğeleri ortalamak, aralarına eşit boşluk koymak ya da sıralarını değiştirmek çok kolaylaşır.
+<|son|>
+<|kullanici|> Grid ile flexbox arasındaki fark nedir?
+<|elalem|>
+Flexbox tek boyutlu düzenler için idealdir, yani öğeleri ya yatayda ya da dikeyde dizer. Grid ise iki boyutludur; satırları ve sütunları aynı anda kontrol eder. Sayfa iskeleti için grid, bir menü ya da buton grubu için flexbox daha uygundur.
+<|son|>
+<|kullanici|> Class ile id arasındaki fark nedir?
+<|elalem|>
+Class, aynı stili birden fazla öğeye vermek için kullanılır ve bir sayfada istediğin kadar tekrar edebilir. Id ise bir öğeyi benzersiz olarak tanımlar ve sayfada sadece bir kez kullanılmalıdır.
+<|son|>
+<|kullanici|> Değişken nedir?
+<|elalem|>
+Değişken, bir değeri saklamak için ona verdiğimiz isimdir. Örneğin kullanıcının adını ya da bir sayacın değerini değişkende tutarız. Program çalıştıkça değişkenin değeri değişebilir, adı da buradan gelir.
+<|son|>
+<|kullanici|> Fonksiyon nedir?
+<|elalem|>
+Fonksiyon, belirli bir işi yapan ve tekrar tekrar çağrılabilen kod parçasıdır. Girdi olarak parametre alabilir ve bir sonuç döndürebilir. Aynı işlemi her seferinde baştan yazmak yerine bir fonksiyona koymak kodu düzenli ve kısa tutar.
+<|son|>
+<|kullanici|> Döngü nedir?
+<|elalem|>
+Döngü, bir işlemi belirli bir koşul sağlandığı sürece ya da bir listedeki her eleman için tekrar etmeyi sağlar. Python'da for döngüsüyle bir listenin her elemanını sırayla işleyebilir, while döngüsüyle bir koşul doğru kaldıkça devam edebilirsin.
+<|son|>
+<|kullanici|> Hata ayıklama nasıl yapılır?
+<|elalem|>
+Hata ayıklarken önce hata mesajını dikkatle okumak gerekir, çünkü genellikle sorunun hangi satırda olduğunu söyler. Sonra şüpheli yerlerde değişkenlerin değerlerini yazdırarak neyin beklenmedik olduğunu bulursun. Sorunu küçük parçalara bölmek çözümü hızlandırır.
+<|son|>
+<|kullanici|> Veritabanı nedir?
+<|elalem|>
+Veritabanı, verileri düzenli bir şekilde saklayan ve hızlıca bulmamızı sağlayan sistemdir. Kullanıcı hesapları, ürünler ya da siparişler gibi bilgiler veritabanında tutulur. Backend bu verileri okuyup yazarak uygulamayı çalıştırır.
+<|son|>
+<|kullanici|> HTTP nedir?
+<|elalem|>
+HTTP, tarayıcı ile sunucu arasındaki iletişim kuralıdır. Tarayıcı bir sayfa istediğinde sunucuya GET isteği gönderir, bir form gönderildiğinde ise genellikle POST isteği kullanılır. Sunucu da cevabıyla birlikte bir durum kodu döndürür.
+<|son|>
+<|kullanici|> 404 hatası ne demek?
+<|elalem|>
+404, istenen sayfanın sunucuda bulunamadığı anlamına gelir. Genellikle adres yanlış yazıldığında ya da sayfa kaldırıldığında görülür. Kullanıcıya dostça bir 404 sayfası göstermek iyi bir deneyim sağlar.
+<|son|>
+<|kullanici|> İyi bir web sitesi nasıl olmalı?
+<|elalem|>
+İyi bir web sitesi hızlı açılır, her ekranda düzgün görünür ve kullanıcının aradığını kolayca bulmasını sağlar. Okunaklı yazılar, yeterli renk karşıtlığı ve sade bir menü önemlidir. Erişilebilirlik için resimlere açıklama eklemeyi unutmamak gerekir.
+<|son|>
+<|kullanici|> Koyu tema neden tercih edilir?
+<|elalem|>
+Koyu tema, özellikle karanlık ortamlarda gözü daha az yorar ve bazı ekranlarda pil tasarrufu sağlar. Ancak yazı ile arka plan arasında yeterli karşıtlık olmalıdır, yoksa okumak zorlaşır.
+<|son|>
+<|kullanici|> Yapay zeka nedir?
+<|elalem|>
+Yapay zeka, bilgisayarların öğrenme, anlama ve karar verme gibi insana özgü görevleri yerine getirmesini sağlayan alandır. Dil modelleri, büyük miktarda metinden kalıplar öğrenerek yeni metinler üretir.
+<|son|>
+<|kullanici|> Dil modeli nasıl çalışır?
+<|elalem|>
+Bir dil modeli, kendisine verilen metne bakarak bir sonraki karakteri ya da kelimeyi tahmin eder. Bu tahmini tekrar tekrar yaparak cümleler kurar. Ne kadar çok ve kaliteli veriyle eğitilirse tahminleri o kadar anlamlı olur.
+<|son|>
+<|kullanici|> Sen nasıl öğreniyorsun?
+<|elalem|>
+Ben karakter seviyesinde çalışan küçük bir dil modeliyim. Eğitim sırasında metindeki her karakterden sonra hangi karakterin geleceğini tahmin etmeye çalışırım. Yanıldığımda hata değerim yükselir ve ağırlıklarım bu hatayı azaltacak yönde güncellenir.
+<|son|>
+<|kullanici|> Loss değeri ne anlama geliyor?
+<|elalem|>
+Loss, modelin tahminlerinin ne kadar yanlış olduğunu gösteren sayıdır. Eğitim ilerledikçe bu değerin düşmesi beklenir. Eğitim loss değeri düşerken doğrulama loss değeri yükselmeye başlarsa model veriyi ezberlemeye başlamış demektir.
+<|son|>
+<|kullanici|> Transformer nedir?
+<|elalem|>
+Transformer, dikkat mekanizması üzerine kurulu bir sinir ağı mimarisidir. Her kelimenin ya da karakterin, metindeki diğer parçalarla ne kadar ilgili olduğunu hesaplar. Bugünkü büyük dil modellerinin çoğu bu mimariyi kullanır.
+<|son|>
+<|kullanici|> Nasılsın?
+<|elalem|>
+İyiyim, teşekkür ederim! Sana HTML, CSS, JavaScript ya da Python hakkında yardımcı olmaya hazırım. Ne öğrenmek istersin?
+<|son|>
+<|kullanici|> Bana bir tavsiye ver.
+<|elalem|>
+Yazılım öğrenirken küçük projelerle başla ve her gün biraz kod yaz. Bir şeyi okumak yerine kendin deneyerek öğrendiğinde çok daha kalıcı olur. Takıldığında hata mesajını okumaktan korkma, genellikle çözümün ipucunu verir.
+<|son|>
+<|kullanici|> Kod yazmaya nereden başlamalıyım?
+<|elalem|>
+Önce HTML ile basit bir sayfa yapmayı öğren, sonra CSS ile onu güzelleştir. Ardından JavaScript ile sayfaya etkileşim ekle. Bu üçünü öğrendikten sonra Python ile backend tarafına geçebilirsin.
+<|son|>
+<|kullanici|> What is HTML?
+<|elalem|>
+HTML is the markup language that builds the structure of web pages. It describes headings, paragraphs, images and links with tags, and the browser reads these tags to display the page.
+<|son|>
+<|kullanici|> What is CSS?
+<|elalem|>
+CSS is the style language that controls how a web page looks. Colors, fonts, spacing and layout are all defined with CSS, while HTML defines what the page contains.
+<|son|>
+<|kullanici|> How are you?
+<|elalem|>
+I am fine, thank you! I am ready to help you with HTML, CSS, JavaScript or Python. What would you like to learn?
+<|son|>

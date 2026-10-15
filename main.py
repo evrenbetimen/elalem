@@ -92,8 +92,8 @@ CONFIG = {
 # Daha fazla veri = daha büyük model. '--boyut' ile seçilir (CPU'da 'kucuk', Apple M serisinde 'orta').
 BOYUTLAR = {
     "kucuk": {"n_embd": 192, "n_head": 6, "n_layer": 4, "block_size": 128, "batch_size": 32, "learning_rate": 3e-3},
-    "orta":  {"n_embd": 256, "n_head": 8, "n_layer": 6, "block_size": 256, "batch_size": 32, "learning_rate": 1e-3},
-    "buyuk": {"n_embd": 384, "n_head": 6, "n_layer": 8, "block_size": 256, "batch_size": 48, "learning_rate": 6e-4},
+    "orta":  {"n_embd": 256, "n_head": 8, "n_layer": 6, "block_size": 512, "batch_size": 24, "learning_rate": 1e-3},
+    "buyuk": {"n_embd": 384, "n_head": 6, "n_layer": 8, "block_size": 512, "batch_size": 32, "learning_rate": 6e-4},
 }
 
 
