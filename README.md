@@ -231,6 +231,20 @@ python3 sentetik_form_uret.py 1500 > veri/elle/sentetik_formlar.txt
 python3 sentetik_sayfa_uret.py 3000 > veri/elle/sentetik_sayfalar.txt
 ```
 
+Hazır açık veri setlerinden karışık bir eğitim verisi indirmek için:
+
+```bash
+python3 karisik_veri_hazirla.py   # veri/elle/karisik/ altına ~4,6 MB yazar
+```
+
+| Dosya | Kaynak | İçerik |
+|---|---|---|
+| `web_kod_codealpaca.txt` | [CodeAlpaca-20k](https://github.com/sahil280114/codealpaca) | ~3100 HTML/CSS/JS istek → kod örneği (İngilizce) |
+| `turkce_soru_cevap_tquad.txt` | [TQuad](https://github.com/TQuad/turkish-nlp-qa-dataset) | ~8700 Türkçe soru → cevabın geçtiği tam cümle (bilim tarihi metinleri) |
+| `genel_ingilizce_alpaca.txt` | [Stanford Alpaca](https://github.com/tatsu-lab/stanford_alpaca) (CC BY-NC 4.0) | 4000 kodsuz, kısa genel İngilizce talimat |
+
+Betik yalnızca standart kütüphaneyi kullanır (urllib + json); Hugging Face kütüphanesi gerekmez.
+
 Yalnızca form verisiyle eğitilen model her isteğe form ile cevap verir ("kişisel sayfa tasarla" deyince bile form yazar). İki üreteci birlikte kullanın ki model istek türünü ayırt etmeyi öğrensin.
 
 ---
@@ -323,6 +337,7 @@ elalem/
 ├── main.py                  # tüm model, eğitim, QC, sunucu ve arayüz
 ├── sentetik_form_uret.py    # sentetik form verisi üreteci
 ├── sentetik_sayfa_uret.py   # sentetik sayfa verisi üreteci
+├── karisik_veri_hazirla.py  # açık veri setlerinden karışık veri indirir
 ├── README.md
 ├── veri/
 │   ├── elle/                # elle eklenen / hazır örnek veriler (git'te)
