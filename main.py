@@ -1276,6 +1276,13 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   textarea.code { display: block; border: 0; border-radius: 0; min-height: 260px; background: var(--code); color: #d6e2ff;
     font: 13px/1.6 var(--mono); resize: vertical; tab-size: 4; white-space: pre; }
 
+  .preview-bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .seg { display: inline-flex; background: var(--panel2); border: 1px solid var(--border); border-radius: 9px; padding: 3px; }
+  .seg button { padding: 5px 12px; font-size: 12px; background: transparent; color: var(--muted); border-radius: 7px; }
+  .seg button.on { background: var(--accent); color: #fff; }
+  .preview-frame { width: 100%; height: 360px; border: 1px solid var(--border); border-radius: 10px; background: #ffffff; display: block; }
+  .preview-frame.dark { background: #0f1117; }
+  .preview-note { color: var(--muted); font-size: 12px; margin-top: 8px; }
   .qc-banner { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 12px;
     border: 1px solid var(--border); background: var(--panel2); margin-bottom: 14px; }
   .qc-banner.ok { background: var(--ok-bg); border-color: rgba(34,197,94,.45); }
@@ -1376,6 +1383,18 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
         </div>
         <textarea class="code" id="output" spellcheck="false" placeholder="Elalem'in ürettiği HTML / CSS / Backend kodu burada görünecek..."></textarea>
       </div>
+    </section>
+
+    <section class="panel">
+      <h2>👁️ Canlı Önizleme</h2>
+      <p class="sub">Üretilen HTML / CSS / JS kodu burada çalışır halde görünür. Kodu düzenlersen önizleme anında güncellenir.</p>
+      <div class="preview-bar">
+        <span class="seg"><button id="bgLight" class="on">Açık zemin</button><button id="bgDark">Koyu zemin</button></span>
+        <span class="seg"><button data-w="100%" class="on">Masaüstü</button><button data-w="420px">Mobil</button></span>
+        <button class="btn-ghost" id="popBtn">↗ Yeni sekmede aç</button>
+      </div>
+      <iframe class="preview-frame" id="preview" sandbox="allow-scripts allow-forms allow-modals" title="Önizleme"></iframe>
+      <div class="preview-note" id="previewNote">Kod ürettiğinde önizleme burada belirecek.</div>
     </section>
 
     <section class="panel">
@@ -1505,16 +1524,85 @@ $("genBtn").onclick = async () => {
     $("output").value = r.cikti;
     $("outMeta").textContent = `${r.qc.dil.toUpperCase()} · ${r.token} karakter · ${r.sure} sn`;
     renderQC(r.qc);
+    renderPreview(r.cikti, r.qc.dil);
   } catch (e) { toast("Hata: " + e.message); }
   finally { btn.disabled = false; btn.innerHTML = "✨ Kod Üret"; }
 };
 $("recheckBtn").onclick = async () => {
-  try { const r = await api("/api/qc", { code: $("output").value }); renderQC(r); toast("QA/QC yeniden çalıştırıldı"); }
+  try { const r = await api("/api/qc", { code: $("output").value }); renderQC(r); renderPreview($("output").value, r.dil); toast("QA/QC yeniden çalıştırıldı"); }
   catch (e) { toast("Hata: " + e.message); }
 };
 $("copyBtn").onclick = async () => {
   try { await navigator.clipboard.writeText($("output").value); toast("Kopyalandı"); }
   catch (e) { $("output").select(); document.execCommand("copy"); toast("Kopyalandı"); }
+};
+
+// ------------------------------------------------------------- önizleme
+// CSS ve JS tek başına görünmez; onları örnek bir sayfaya yerleştiririz.
+const DEMO_BODY = `<div class="container">
+  <nav class="navbar"><a class="logo" href="#">Elalem</a>
+    <ul class="nav-links"><li><a href="#">Ana Sayfa</a></li><li><a href="#">Hakkında</a></li></ul></nav>
+  <div class="hero"><h1>Başlık</h1><p>Örnek paragraf metni.</p></div>
+  <div class="grid">
+    <div class="card"><div class="card-body"><h2 class="card-title">Kart</h2><p class="card-text">Açıklama.</p>
+      <button class="btn btn-primary" id="btn">Buton</button></div></div>
+    <div class="card"><div class="card-body"><h2 class="card-title">Kart 2</h2><p class="card-text">Açıklama.</p></div></div>
+    <div class="card"><div class="card-body"><h2 class="card-title">Kart 3</h2><p class="card-text">Açıklama.</p></div></div>
+  </div>
+  <p id="mesaj"></p>
+  <footer class="footer"><p>&copy; Elalem</p></footer>
+</div>`;
+let previewDoc = "";
+function buildPreview(code, dil) {
+  const base = '<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">' +
+    '<style>body{font-family:system-ui,sans-serif;margin:16px;}</style>';
+  const guard = "<script>window.onerror=function(m,s,l){var d=document.createElement('pre');" +
+    "d.style.cssText='color:#b91c1c;background:#fee2e2;padding:8px;border-radius:6px;white-space:pre-wrap';" +
+    "d.textContent='JS hatası (satır '+l+'): '+m;document.body.appendChild(d);};<\/script>";
+  if (dil === "html") {
+    if (/<html[\s>]/i.test(code)) return code.replace(/<head([^>]*)>/i, m => m + guard);
+    return "<!DOCTYPE html><html><head>" + base + guard + "</head><body>" + code + "</body></html>";
+  }
+  if (dil === "css") return "<!DOCTYPE html><html><head>" + base + "<style>" + code + "</style></head><body>" + DEMO_BODY + "</body></html>";
+  if (dil === "js") return "<!DOCTYPE html><html><head>" + base + guard + "</head><body>" + DEMO_BODY +
+    "<script>" + code.replace(/<\/script/gi, "<\\/script") + "<\/script></body></html>";
+  return null;
+}
+function renderPreview(code, dil) {
+  const note = $("previewNote");
+  const doc = code && code.trim() ? buildPreview(code, dil) : null;
+  if (doc === null) {
+    previewDoc = "";
+    const msg = dil === "python"
+      ? "Python backend kodu tarayıcıda çalıştırılamaz; güvenlik için sunucuda da çalıştırılmaz. Doğruluğu QA/QC raporunda (ast.parse) görebilirsin."
+      : "Bu çıktı görsel bir kod değil (" + (dil || "boş") + "); önizlenecek bir şey yok.";
+    $("preview").srcdoc = "<body style=\"font-family:system-ui;color:#555;display:grid;place-items:center;height:90vh;margin:0;text-align:center;padding:20px\">" + esc(msg) + "</body>";
+    note.textContent = msg;
+    return;
+  }
+  previewDoc = doc;
+  $("preview").srcdoc = doc;
+  note.textContent = dil === "css" ? "CSS, örnek bir sayfaya (nav, kart, buton, grid) uygulanarak gösteriliyor."
+    : dil === "js" ? "JS, örnek bir sayfada çalıştırılıyor (#btn, #mesaj öğeleri hazır). Hatalar kırmızı kutuda görünür."
+    : "HTML olduğu gibi işleniyor. Önizleme izole bir sandbox içinde çalışır.";
+}
+let previewTimer = null;
+$("output").addEventListener("input", () => {
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(async () => {
+    try { const q = await api("/api/qc", { code: $("output").value }); renderQC(q); renderPreview($("output").value, q.dil); } catch (e) {}
+  }, 500);
+});
+$("bgLight").onclick = () => { $("preview").classList.remove("dark"); $("bgLight").classList.add("on"); $("bgDark").classList.remove("on"); };
+$("bgDark").onclick = () => { $("preview").classList.add("dark"); $("bgDark").classList.add("on"); $("bgLight").classList.remove("on"); };
+document.querySelectorAll("[data-w]").forEach(b => b.onclick = () => {
+  document.querySelectorAll("[data-w]").forEach(x => x.classList.remove("on")); b.classList.add("on");
+  $("preview").style.width = b.dataset.w; $("preview").style.margin = b.dataset.w === "100%" ? "0" : "0 auto";
+});
+$("popBtn").onclick = () => {
+  if (!previewDoc) { toast("Önizlenecek HTML/CSS/JS yok."); return; }
+  const url = URL.createObjectURL(new Blob([previewDoc], { type: "text/html" }));
+  window.open(url, "_blank");
 };
 
 // --------------------------------------------------------------- QA / QC
