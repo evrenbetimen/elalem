@@ -12,7 +12,7 @@ Katmanlar:
   2. ElalemGPT         -> Causal Multi-Head Self-Attention + FFN + Block
   3. Eğitim            -> gömülü Full-Stack veri seti, get_batch, AdamW + CrossEntropyLoss
   4. QA / QC           -> HTML / CSS / Python / JS kural tabanlı doğrulayıcı
-  5. Web Sunucusu      -> http.server ile 127.0.0.1:8080 üzerinde koyu temalı kontrol paneli
+  5. Web Sunucusu      -> http.server ile 127.0.0.1:8080: / kod üretim stüdyosu, /backend kontrol paneli
 
 Kullanım:
   pip install torch
@@ -1357,7 +1357,8 @@ class ElalemMotoru:
                 "vocab": self.tokenizer.chars,
                 "config": {k: v for k, v in self.cfg.items()},
                 "adim": self.adim,
-            }, self.ckpt_yolu)
+            }, self.ckpt_yolu + ".tmp")
+            os.replace(self.ckpt_yolu + ".tmp", self.ckpt_yolu)   # yarıda kalan yazım eski kaydı bozmasın
             self.log(f"Model kaydedildi: {os.path.basename(self.ckpt_yolu)}")
         except Exception as e:
             self.log(f"Kaydetme hatası: {e}")
@@ -1418,6 +1419,9 @@ class ElalemMotoru:
             with self.state_lock:
                 self.val_gecmisi.append((step, s["train"], s["val"]))
             self.log(f"DEĞERLENDİRME adım {step} | train {s['train']:.4f} | val {s['val']:.4f}")
+            if step % 250 == 0:         # program kapanırsa en fazla 250 adım kaybolsun
+                with self.lock:
+                    self._checkpoint_kaydet()
 
         try:
             train_model(self.model, self.optimizer, self.train_data, self.val_data, self.cfg,
@@ -1645,6 +1649,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     <div><h1>Elalem</h1><small>Sıfırdan PyTorch karakter seviyesi GPT</small></div>
   </div>
   <div class="chips">
+    <a class="chip" href="/" style="text-decoration:none;color:inherit">← <b>Stüdyo</b></a>
     <span class="chip"><span class="dot" id="liveDot"></span><b id="statusText">Hazır</b></span>
     <span class="chip">Cihaz <b id="device">-</b></span>
     <span class="chip">Parametre <b id="params">-</b></span>
@@ -2001,6 +2006,412 @@ function renderQC(q) {
 """
 
 
+# Ana sayfa (/): yalnızca kod üretimi için sade, sohbet tarzı stüdyo. Eğitim paneli /backend adresinde.
+STUDIO_HTML = r"""<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Elalem</title>
+<style>
+  :root {
+    --bg: #faf9f6; --surface: #ffffff; --surface2: #f3f1ec; --border: #e6e2d9; --border2: #d8d3c7;
+    --text: #1f1e1c; --muted: #6f6b62; --faint: #9a958a;
+    --accent: #1f6f63; --accent-hover: #175a50; --accent-soft: #e1efec;
+    --ok: #2f7d4f; --ok-bg: #e6f2ea; --err: #b4372f; --err-bg: #f9e4e1;
+    --code-bg: #f7f6f2; --code-text: #2b2a27;
+    --hl-tag: #a3412b; --hl-attr: #7a5a12; --hl-str: #2f7d4f; --hl-kw: #6b3fa0; --hl-com: #9a958a; --hl-num: #1f5fa8;
+    --shadow: 0 1px 2px rgba(31,30,28,.04), 0 4px 16px rgba(31,30,28,.06);
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1b19; --surface: #252421; --surface2: #2d2b28; --border: #393631; --border2: #4a463f;
+      --text: #ece9e2; --muted: #a8a397; --faint: #7d786d;
+      --accent: #3fa391; --accent-hover: #52b5a3; --accent-soft: #1e332f;
+      --ok: #6cc28f; --ok-bg: #1f3328; --err: #ef8a80; --err-bg: #3d2420;
+      --code-bg: #201f1c; --code-text: #e6e2d9;
+      --hl-tag: #e6957a; --hl-attr: #e0c07a; --hl-str: #8fcf9f; --hl-kw: #c5a3f0; --hl-com: #7d786d; --hl-num: #8ab8f0;
+      --shadow: 0 1px 2px rgba(0,0,0,.2), 0 4px 16px rgba(0,0,0,.25);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 15px; line-height: 1.6;
+    display: flex; flex-direction: column; -webkit-font-smoothing: antialiased; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  a { color: inherit; }
+
+  /* Üst çubuk */
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 12px 20px; position: sticky; top: 0; z-index: 10; background: var(--bg); }
+  .brand { display: flex; align-items: center; gap: 10px; font-family: var(--serif); font-size: 20px; letter-spacing: .2px; }
+  .mark { width: 26px; height: 26px; color: var(--accent); }
+  .top-right { display: flex; align-items: center; gap: 8px; }
+  .pill { display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px; border-radius: 999px;
+    border: 1px solid var(--border); background: var(--surface); color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+  .pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+  .pill .dot.busy { background: var(--accent); animation: pulse 1.4s infinite; }
+  @keyframes pulse { 50% { opacity: .35; } }
+  .ghost { border: 1px solid transparent; background: transparent; padding: 6px 10px; border-radius: 8px;
+    color: var(--muted); text-decoration: none; font-size: 13.5px; display: inline-flex; align-items: center; gap: 6px; }
+  .ghost:hover { background: var(--surface2); color: var(--text); }
+  .ghost svg { width: 16px; height: 16px; }
+
+  /* Sohbet alanı */
+  main { flex: 1; overflow-y: auto; scroll-behavior: smooth; }
+  .thread { max-width: 780px; margin: 0 auto; padding: 8px 20px 24px; }
+  .empty { min-height: calc(100vh - 260px); display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; gap: 10px; padding: 24px 0; }
+  .empty .mark { width: 40px; height: 40px; }
+  .empty h1 { font-family: var(--serif); font-weight: 400; font-size: clamp(26px, 5vw, 36px); margin: 6px 0 2px; letter-spacing: -.2px; }
+  .empty p { color: var(--muted); margin: 0 0 18px; }
+  .ideas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; width: 100%; max-width: 620px; }
+  .idea { text-align: left; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border);
+    background: var(--surface); transition: border-color .15s, background .15s; }
+  .idea:hover { border-color: var(--border2); background: var(--surface2); }
+  .idea b { display: block; font-weight: 600; font-size: 14px; }
+  .idea span { color: var(--muted); font-size: 13px; }
+
+  .msg { margin: 22px 0; animation: rise .25s ease-out; }
+  @keyframes rise { from { opacity: 0; transform: translateY(4px); } }
+  .msg.user { display: flex; justify-content: flex-end; }
+  .bubble { background: var(--surface2); border-radius: 18px; padding: 10px 16px; max-width: 85%; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .bot { display: flex; gap: 14px; align-items: flex-start; }
+  .bot > .mark { flex: none; width: 24px; height: 24px; margin-top: 3px; }
+  .bot .body { flex: 1; min-width: 0; }
+  .prose { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; color: var(--faint); font-size: 12.5px; }
+  .badge { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px; font-weight: 500; font-size: 12px; }
+  .badge.ok { background: var(--ok-bg); color: var(--ok); }
+  .badge.err { background: var(--err-bg); color: var(--err); }
+  .act { border: none; background: transparent; padding: 4px 8px; border-radius: 7px; color: var(--faint); font-size: 12.5px;
+    display: inline-flex; align-items: center; gap: 5px; }
+  .act:hover { background: var(--surface2); color: var(--text); }
+  .act svg { width: 14px; height: 14px; }
+  .issues { margin: 8px 0 0; padding: 10px 14px; border-radius: 10px; background: var(--err-bg); color: var(--err); font-size: 13px; }
+  .issues ul { margin: 4px 0 0; padding-left: 18px; }
+
+  /* Kod kartı */
+  .card { border: 1px solid var(--border); border-radius: 14px; overflow: hidden; background: var(--surface); box-shadow: var(--shadow); }
+  .card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px 6px 14px;
+    border-bottom: 1px solid var(--border); background: var(--surface); }
+  .lang { font-size: 12.5px; color: var(--muted); font-weight: 500; }
+  .tabs { display: inline-flex; padding: 3px; border-radius: 9px; background: var(--surface2); gap: 2px; }
+  .tab { border: none; background: transparent; padding: 3px 11px; border-radius: 7px; font-size: 12.5px; color: var(--muted); }
+  .tab.on { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .head-right { display: flex; align-items: center; gap: 4px; }
+  pre.code { margin: 0; padding: 14px 16px; overflow: auto; max-height: 520px; background: var(--code-bg); color: var(--code-text);
+    font-family: var(--mono); font-size: 13px; line-height: 1.55; tab-size: 2; }
+  .t-tag { color: var(--hl-tag); } .t-attr { color: var(--hl-attr); } .t-str { color: var(--hl-str); }
+  .t-kw { color: var(--hl-kw); } .t-com { color: var(--hl-com); font-style: italic; } .t-num { color: var(--hl-num); }
+  iframe.preview { display: block; width: 100%; height: 360px; border: 0; background: #fff; }
+
+  /* Yazma kutusu */
+  .composer-wrap { padding: 8px 20px 18px; background: linear-gradient(to bottom, transparent, var(--bg) 30%); }
+  .composer { max-width: 780px; margin: 0 auto; border: 1px solid var(--border2); background: var(--surface); border-radius: 20px;
+    box-shadow: var(--shadow); padding: 12px 12px 10px 16px; transition: border-color .15s; }
+  .composer:focus-within { border-color: var(--faint); }
+  textarea { width: 100%; border: none; outline: none; resize: none; background: transparent; color: var(--text);
+    font: inherit; line-height: 1.5; max-height: 220px; min-height: 26px; padding: 2px 0; }
+  textarea::placeholder { color: var(--faint); }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
+  .opts { position: relative; }
+  .pop { position: absolute; bottom: calc(100% + 8px); left: 0; width: 260px; padding: 14px; border-radius: 14px;
+    border: 1px solid var(--border); background: var(--surface); box-shadow: var(--shadow); display: none; z-index: 20; }
+  .pop.open { display: block; }
+  .pop label { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin-top: 10px; }
+  .pop label:first-child { margin-top: 0; }
+  .pop input[type=range] { width: 100%; accent-color: var(--accent); }
+  .send { width: 34px; height: 34px; border-radius: 10px; border: none; background: var(--accent); color: #fff;
+    display: grid; place-items: center; transition: background .15s, opacity .15s; }
+  .send:hover { background: var(--accent-hover); }
+  .send:disabled { opacity: .35; cursor: default; }
+  .send svg { width: 18px; height: 18px; }
+  .hint { max-width: 780px; margin: 8px auto 0; text-align: center; color: var(--faint); font-size: 12px; }
+
+  .typing { display: inline-flex; gap: 5px; padding: 8px 0; }
+  .typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); animation: blink 1.2s infinite; }
+  .typing i:nth-child(2) { animation-delay: .2s; } .typing i:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
+
+  .toast { position: fixed; left: 50%; bottom: 110px; transform: translateX(-50%); background: var(--text); color: var(--bg);
+    padding: 8px 14px; border-radius: 10px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 30; }
+  .toast.show { opacity: 1; }
+
+  @media (max-width: 600px) {
+    .topbar { padding: 10px 16px; }
+    .thread { padding: 4px 16px 16px; }
+    .composer-wrap { padding: 6px 16px 12px; }
+    .ideas { grid-template-columns: 1fr; }
+    .pill.hide-sm { display: none; }
+    .bot { gap: 10px; }
+    .bot > .mark { display: none; }
+    iframe.preview { height: 340px; }
+  }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="logo" viewBox="0 0 32 32"><rect x="1" y="1" width="30" height="30" rx="9" fill="currentColor"/><path d="M10 11l-4 5 4 5M22 11l4 5-4 5M18 9l-4 14" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+</svg>
+
+<div class="topbar">
+  <div class="brand"><svg class="mark"><use href="#logo"/></svg>Elalem</div>
+  <div class="top-right">
+    <span class="pill hide-sm" id="modelPill"><span class="dot" id="dot"></span><span id="modelText">Model yükleniyor</span></span>
+    <button class="ghost" id="newChat" title="Yeni sohbet">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span class="hide-sm">Yeni</span></button>
+    <a class="ghost" href="/backend" title="Eğitim paneli">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Panel</a>
+  </div>
+</div>
+
+<main id="scroller">
+  <div class="thread" id="thread">
+    <div class="empty" id="empty">
+      <svg class="mark"><use href="#logo"/></svg>
+      <h1 id="greet">Bugün ne yapalım?</h1>
+      <p>Ne istediğini yaz, Elalem kodunu yazsın ve önizlesin.</p>
+      <div class="ideas">
+        <button class="idea" data-p="Bir giriş formu yap. kullanıcı adı ve şifre olsun"><b>Giriş formu</b><span>Kullanıcı adı ve şifre</span></button>
+        <button class="idea" data-p="Örnek bir kişisel sayfa tasarla"><b>Kişisel sayfa</b><span>Hakkımda ve ilgi alanları</span></button>
+        <button class="idea" data-p="Bir ürün kartı yap"><b>Ürün kartı</b><span>Fiyat ve sepete ekle butonu</span></button>
+        <button class="idea" data-p="Write a Python function to reverse a string."><b>Python fonksiyonu</b><span>Metni tersine çeviren fonksiyon</span></button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div class="composer-wrap">
+  <div class="composer">
+    <textarea id="input" rows="1" placeholder="Elalem'e ne yapmasını istediğini yaz..." autofocus></textarea>
+    <div class="row">
+      <div class="opts">
+        <button class="act" id="optBtn" title="Üretim ayarları">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Ayarlar</button>
+        <div class="pop" id="pop">
+          <label>Yaratıcılık <b id="tempV">0.6</b></label>
+          <input type="range" id="temp" min="0.1" max="1.5" step="0.05" value="0.6">
+          <label>Maksimum uzunluk <b id="lenV">600</b></label>
+          <input type="range" id="len" min="50" max="1500" step="50" value="600">
+          <label>Top-k <b id="topkV">10</b></label>
+          <input type="range" id="topk" min="1" max="60" step="1" value="10">
+        </div>
+      </div>
+      <button class="send" id="send" title="Gönder (Enter)" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+    </div>
+  </div>
+  <div class="hint">Elalem küçük, sıfırdan eğitilmiş bir modeldir ve hata yapabilir. Her çıktı otomatik kalite kontrolünden geçer.</div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+const DIL_ADI = { html: "HTML", css: "CSS", js: "JavaScript", python: "Python", metin: "Metin" };
+const AYAR_ANAHTARI = "elalem-studyo-ayar";
+let mesgul = false;
+
+function toast(t) { const el = $("toast"); el.textContent = t; el.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove("show"), 1600); }
+
+async function api(yol, govde) {
+  const r = await fetch(yol, govde ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(govde) } : {});
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.hata || ("HTTP " + r.status));
+  return j;
+}
+
+/* Basit sözdizimi renklendirme: tek geçişte, kaçışlı metin üzerinde çalışır */
+function renklendir(kod, dil) {
+  const e = esc(kod);
+  if (dil === "html") {
+    return e.replace(/(&lt;!--[\s\S]*?--&gt;)|(&lt;\/?[a-zA-Z][\w-]*)|([\w-:]+)(=)(&quot;[^&]*?&quot;)|(&gt;|\/&gt;)/g,
+      (m, com, tag, attr, eq, val, close) => com ? '<span class="t-com">' + com + '</span>'
+        : tag ? '<span class="t-tag">' + tag + '</span>'
+        : attr ? '<span class="t-attr">' + attr + '</span>' + eq + '<span class="t-str">' + val + '</span>'
+        : '<span class="t-tag">' + close + '</span>');
+  }
+  const kw = dil === "python"
+    ? "def|return|if|elif|else|for|while|in|import|from|as|class|try|except|finally|with|lambda|None|True|False|and|or|not|pass|break|continue|yield|raise|is|global"
+    : dil === "css" ? "@media|@import|!important"
+    : "function|return|if|else|for|while|const|let|var|new|class|this|try|catch|finally|throw|async|await|of|in|null|true|false|undefined|typeof|switch|case|break|continue|default|export|import|from";
+  const com = dil === "python" ? "#[^\\n]*" : dil === "css" ? "\\/\\*[\\s\\S]*?\\*\\/" : "\\/\\/[^\\n]*|\\/\\*[\\s\\S]*?\\*\\/";
+  const re = new RegExp("(" + com + ")|(&quot;(?:(?!&quot;)[^\\n])*&quot;|&#39;(?:(?!&#39;)[^\\n])*&#39;|`[^`]*`)|(?<![\\w-])(" + kw + ")(?![\\w-])|\\b(\\d+(?:\\.\\d+)?)\\b", "g");
+  return e.replace(re, (m, c, s, k, n) => c ? '<span class="t-com">' + c + '</span>' : s ? '<span class="t-str">' + s + '</span>'
+    : k ? '<span class="t-kw">' + k + '</span>' : '<span class="t-num">' + n + '</span>');
+}
+
+const ORNEK_GOVDE = '<div class="container"><nav class="navbar"><a class="logo" href="#">Elalem</a><ul class="nav-links"><li><a href="#">Ana Sayfa</a></li><li><a href="#">Hakkında</a></li></ul></nav>' +
+  '<div class="hero"><h1>Başlık</h1><p>Örnek paragraf metni.</p></div><div class="card"><div class="card-body"><h2 class="card-title">Kart</h2>' +
+  '<p class="card-text">Açıklama.</p><button class="btn btn-primary" id="btn">Buton</button></div></div><p id="mesaj"></p></div>';
+function onizlemeBelgesi(kod, dil) {
+  const temel = '<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{font-family:system-ui,sans-serif;margin:16px;color:#1f1e1c}</style>';
+  const koruma = "<script>window.onerror=function(m,s,l){var d=document.createElement('pre');d.style.cssText='color:#b4372f;background:#f9e4e1;padding:8px;border-radius:8px;white-space:pre-wrap';d.textContent='JS hatası (satır '+l+'): '+m;document.body.appendChild(d);};<\/script>";
+  if (dil === "html") return /<html[\s>]/i.test(kod) ? kod.replace(/<head([^>]*)>/i, m => m + koruma) : "<!DOCTYPE html><html><head>" + temel + koruma + "</head><body>" + kod + "</body></html>";
+  if (dil === "css") return "<!DOCTYPE html><html><head>" + temel + "<style>" + kod + "</style></head><body>" + ORNEK_GOVDE + "</body></html>";
+  if (dil === "js") return "<!DOCTYPE html><html><head>" + temel + koruma + "</head><body>" + ORNEK_GOVDE + "<script>" + kod.replace(/<\/script/gi, "<\\/script") + "<\/script></body></html>";
+  return null;
+}
+
+const IKON_KOPYA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
+const IKON_YENI = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/></svg>';
+const IKON_INDIR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 4v12M6 10l6 6 6-6M4 20h16"/></svg>';
+
+function kaydir() { const s = $("scroller"); s.scrollTop = s.scrollHeight; }
+function bosuGizle() { const e = $("empty"); if (e) e.remove(); }
+
+function kullaniciEkle(metin) {
+  bosuGizle();
+  const d = document.createElement("div");
+  d.className = "msg user";
+  d.innerHTML = '<div class="bubble"></div>';
+  d.firstChild.textContent = metin;
+  $("thread").appendChild(d);
+}
+
+function botKutusu() {
+  const d = document.createElement("div");
+  d.className = "msg bot";
+  d.innerHTML = '<svg class="mark"><use href="#logo"/></svg><div class="body"><div class="typing"><i></i><i></i><i></i></div></div>';
+  $("thread").appendChild(d);
+  kaydir();
+  return d.querySelector(".body");
+}
+
+function cevapCiz(govde, r, istek) {
+  const kod = r.cikti || "";
+  const qc = r.qc || {};
+  const dil = qc.dil || "metin";
+  let html = "";
+  if (!kod.trim()) {
+    html = '<div class="prose" style="color:var(--muted)">Model bu istek için bir çıktı üretemedi. Biraz daha eğitim ya da farklı bir ifade deneyebilirsin.</div>';
+  } else if (dil === "metin") {
+    html = '<div class="prose"></div>';
+  } else {
+    const onizlenebilir = ["html", "css", "js"].includes(dil);
+    html = '<div class="card"><div class="card-head"><span class="lang">' + (DIL_ADI[dil] || dil) + '</span><div class="head-right">' +
+      (onizlenebilir ? '<div class="tabs"><button class="tab on" data-v="kod">Kod</button><button class="tab" data-v="onizleme">Önizleme</button></div>' : '') +
+      '<button class="act kopya" title="Kopyala">' + IKON_KOPYA + '</button>' +
+      '<button class="act indir" title="İndir">' + IKON_INDIR + '</button></div></div>' +
+      '<pre class="code">' + renklendir(kod, dil) + '</pre></div>';
+  }
+  const kontrol = (qc.kontroller || []);
+  const hatalar = kontrol.filter(k => !k.durum);
+  html += '<div class="meta">' +
+    (kod.trim() ? (qc.gecti ? '<span class="badge ok">✓ Kalite kontrolü geçti</span>'
+                            : '<span class="badge err">✗ ' + hatalar.length + ' sorun bulundu</span>') : '') +
+    '<span>' + (r.token || 0) + ' karakter · ' + (r.sure || 0) + ' sn</span>' +
+    '<button class="act yeniden" title="Yeniden üret">' + IKON_YENI + 'Yeniden üret</button></div>';
+  if (kod.trim() && hatalar.length) {
+    html += '<div class="issues">Kalite kontrolü şunları buldu:<ul>' +
+      hatalar.slice(0, 5).map(k => '<li>' + esc(k.ad) + (k.detay ? ': ' + esc(k.detay) : '') + '</li>').join("") + '</ul></div>';
+  }
+  govde.innerHTML = html;
+  const prose = govde.querySelector(".prose");
+  if (prose && dil === "metin" && kod.trim()) prose.textContent = kod;
+
+  const kart = govde.querySelector(".card");
+  if (kart) {
+    const pre = kart.querySelector("pre");
+    let iframe = null;
+    kart.querySelectorAll(".tab").forEach(t => t.onclick = () => {
+      kart.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x === t));
+      if (t.dataset.v === "onizleme") {
+        if (!iframe) {
+          iframe = document.createElement("iframe");
+          iframe.className = "preview";
+          iframe.setAttribute("sandbox", "allow-scripts allow-forms allow-modals");
+          iframe.srcdoc = onizlemeBelgesi(kod, dil);
+          kart.appendChild(iframe);
+        }
+        pre.style.display = "none"; iframe.style.display = "block";
+      } else {
+        pre.style.display = ""; if (iframe) iframe.style.display = "none";
+      }
+    });
+    kart.querySelector(".kopya").onclick = () => navigator.clipboard.writeText(kod).then(() => toast("Kopyalandı"), () => toast("Kopyalanamadı"));
+    kart.querySelector(".indir").onclick = () => {
+      const uzanti = { html: "html", css: "css", js: "js", python: "py" }[dil] || "txt";
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([kod], { type: "text/plain" }));
+      a.download = "elalem." + uzanti; a.click(); URL.revokeObjectURL(a.href);
+    };
+    if (["html", "css", "js"].includes(dil) && qc.gecti) kart.querySelector('.tab[data-v="onizleme"]').click();
+  }
+  govde.querySelector(".yeniden").onclick = () => uret(istek, govde);
+  kaydir();
+}
+
+async function uret(istek, mevcutGovde) {
+  if (mesgul) return;
+  mesgul = true; gonderDurumu();
+  const govde = mevcutGovde || botKutusu();
+  if (mevcutGovde) govde.innerHTML = '<div class="typing"><i></i><i></i><i></i></div>';
+  try {
+    const r = await api("/api/generate", { prompt: istek, temperature: Number($("temp").value),
+      max_new_tokens: Number($("len").value), top_k: Number($("topk").value) });
+    cevapCiz(govde, r, istek);
+  } catch (e) {
+    govde.innerHTML = '<div class="issues"></div>';
+    govde.firstChild.textContent = "Bir sorun oluştu: " + e.message;
+  } finally {
+    mesgul = false; gonderDurumu();
+  }
+}
+
+function gonder() {
+  const metin = $("input").value.trim();
+  if (!metin || mesgul) return;
+  $("input").value = ""; boyutla();
+  kullaniciEkle(metin);
+  uret(metin);
+}
+
+function gonderDurumu() { $("send").disabled = mesgul || !$("input").value.trim(); }
+function boyutla() { const t = $("input"); t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 220) + "px"; gonderDurumu(); }
+
+$("input").addEventListener("input", boyutla);
+$("input").addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); gonder(); }
+});
+$("send").onclick = gonder;
+document.querySelectorAll(".idea").forEach(b => b.onclick = () => { $("input").value = b.dataset.p; boyutla(); gonder(); });
+$("newChat").onclick = () => location.reload();
+$("optBtn").onclick = e => { e.stopPropagation(); $("pop").classList.toggle("open"); };
+document.addEventListener("click", e => { if (!$("pop").contains(e.target)) $("pop").classList.remove("open"); });
+
+function ayarKaydet() {
+  $("tempV").textContent = $("temp").value; $("lenV").textContent = $("len").value; $("topkV").textContent = $("topk").value;
+  try { localStorage.setItem(AYAR_ANAHTARI, JSON.stringify({ temp: $("temp").value, len: $("len").value, topk: $("topk").value })); } catch (e) {}
+}
+try { const a = JSON.parse(localStorage.getItem(AYAR_ANAHTARI) || "null"); if (a) { $("temp").value = a.temp; $("len").value = a.len; $("topk").value = a.topk; } } catch (e) {}
+["temp", "len", "topk"].forEach(id => $(id).addEventListener("input", ayarKaydet));
+ayarKaydet();
+
+const saat = new Date().getHours();
+$("greet").textContent = saat < 6 ? "İyi geceler, ne yapalım?" : saat < 12 ? "Günaydın, ne yapalım?" : saat < 18 ? "Bugün ne yapalım?" : "İyi akşamlar, ne yapalım?";
+
+async function durumYenile() {
+  try {
+    const s = await api("/api/status");
+    const p = s.parametre >= 1e6 ? (s.parametre / 1e6).toFixed(1) + "M" : Math.round(s.parametre / 1e3) + "K";
+    $("dot").classList.toggle("busy", !!s.egitimde);
+    $("modelText").textContent = s.egitimde ? "Eğitiliyor · adım " + s.adim : "Elalem " + p + " · " + s.cihaz;
+  } catch (e) {
+    $("modelText").textContent = "Bağlantı yok";
+  }
+}
+durumYenile(); setInterval(durumYenile, 5000);
+</script>
+</body>
+</html>
+"""
+
+
 # =============================================================================
 # 8. 127.0.0.1 WEB SUNUCUSU (http.server)
 # =============================================================================
@@ -2034,6 +2445,8 @@ def handler_olustur(motor):
         def do_GET(self):
             yol = self.path.split("?", 1)[0]
             if yol in ("/", "/index.html"):
+                self._gonder(200, STUDIO_HTML, "text/html; charset=utf-8")
+            elif yol in ("/backend", "/backend/"):
                 self._gonder(200, DASHBOARD_HTML, "text/html; charset=utf-8")
             elif yol == "/api/status":
                 self._json(200, motor.durum())
@@ -2177,21 +2590,24 @@ def main():
     ap.add_argument("--block-size", type=int, help="Bağlam uzunluğu (karakter)")
     ap.add_argument("--batch-size", type=int, help="Batch boyutu")
     ap.add_argument("--lr", type=float, help="Varsayılan öğrenme oranı")
+    ap.add_argument("--dropout", type=float, help="Dropout oranı, 0-0.5 (varsayılan 0.1)")
     args = ap.parse_args()
 
     cfg = dict(CONFIG, **BOYUTLAR[args.boyut])
     for anahtar, deger in (("n_embd", args.n_embd), ("n_layer", args.n_layer), ("n_head", args.n_head),
                            ("block_size", args.block_size), ("batch_size", args.batch_size),
-                           ("learning_rate", args.lr)):
+                           ("learning_rate", args.lr), ("dropout", args.dropout)):
         if deger is not None:
             cfg[anahtar] = deger
     if min(cfg["n_embd"], cfg["n_layer"], cfg["n_head"], cfg["block_size"], cfg["batch_size"]) < 1:
         ap.error("Model ayarları pozitif olmalı.")
+    if not 0 <= cfg["dropout"] < 1:
+        ap.error("--dropout 0 ile 1 arasında olmalı.")
     if cfg["n_embd"] % cfg["n_head"]:
         ap.error(f"--n-embd ({cfg['n_embd']}) --n-head ({cfg['n_head']}) sayısına tam bölünmeli.")
     tahmini = 12 * cfg["n_layer"] * cfg["n_embd"] ** 2
     print(f"Model: n_embd={cfg['n_embd']} n_head={cfg['n_head']} n_layer={cfg['n_layer']} "
-          f"block_size={cfg['block_size']} batch={cfg['batch_size']} lr={cfg['learning_rate']} "
+          f"block_size={cfg['block_size']} batch={cfg['batch_size']} lr={cfg['learning_rate']} dropout={cfg['dropout']} "
           f"(~{tahmini / 1e6:.1f}M parametre)", flush=True)
     motor = ElalemMotoru(cfg, FULLSTACK_DATA)
     if args.selftest:

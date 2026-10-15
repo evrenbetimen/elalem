@@ -163,7 +163,7 @@ Ortak ayarlar: dropout 0.1, `eval_interval` 50 adım, `eval_iters` 10 batch, see
 | Değerlendirme | Her 50 adımda ve son adımda, 10 batch ortalaması (train + val) |
 | Çalışma şekli | Arka plan thread'i, panel her saniye durumu çeker |
 | Durdurma | Panelden **■ Durdur**, mevcut adım bitince durur |
-| Kayıt | Eğitim bitince ya da durdurulunca ağırlıklar otomatik kaydedilir, sonraki açılışta kaldığı adımdan devam eder |
+| Kayıt | Ağırlıklar her 250 adımda bir, eğitim bitince ve durdurulunca otomatik kaydedilir; sonraki açılışta kaldığı adımdan devam eder |
 
 Öğrenme oranı her eğitim başlatılışında panelden değiştirilebilir. Eğitim sırasında üretim yapılabilir; model kilidi her adım arasında serbest kalır.
 
@@ -278,9 +278,21 @@ Skor = geçen kontrol oranı × 100, her uyarı için −3 (en fazla −15).
 
 ---
 
+## Stüdyo (ana sayfa)
+
+`http://127.0.0.1:8080` yalnızca kod üretimi için sade, sohbet tarzı bir ekran açar:
+
+- Ortada bir sohbet akışı, altta yazma kutusu. Enter gönderir, Shift+Enter yeni satır açar.
+- Boş ekranda hazır örnek istekler (giriş formu, kişisel sayfa, ürün kartı, Python fonksiyonu).
+- Kod cevapları renklendirilmiş bir kod kartında gelir. HTML, CSS ve JS için **Kod / Önizleme** sekmesi vardır; kalite kontrolünü geçen çıktı doğrudan önizlemede açılır.
+- Her cevabın altında kalite kontrolü rozeti (geçti / sorun sayısı), bulunan sorunlar, Kopyala, İndir ve Yeniden üret düğmeleri.
+- Ayarlar menüsünde yaratıcılık (sıcaklık), maksimum uzunluk ve top-k; tarayıcıda hatırlanır.
+- Üst çubukta modelin boyutu, cihazı ve eğitim durumu; **Panel** düğmesi `/backend` adresine gider.
+- Açık ve koyu temayı işletim sisteminin ayarına göre seçer, telefonda da çalışır.
+
 ## Kontrol paneli
 
-`http://127.0.0.1:8080`. Koyu tema, masaüstü ve telefonda çalışır, internet bağlantısı gerektirmez.
+`http://127.0.0.1:8080/backend`. Koyu tema, masaüstü ve telefonda çalışır, internet bağlantısı gerektirmez.
 
 | Bölüm | İçerik |
 |---|---|
@@ -299,7 +311,8 @@ Tüm cevaplar JSON'dur. Sunucu sadece `127.0.0.1`'e bağlanır.
 
 | Yöntem | Yol | Gövde | Açıklama |
 |---|---|---|---|
-| GET | `/` | — | Kontrol paneli |
+| GET | `/` | — | Stüdyo (kod üretim ekranı) |
+| GET | `/backend` | — | Kontrol paneli (eğitim, veri, QA/QC) |
 | GET | `/api/status` | — | Eğitim durumu, loss geçmişi, loglar, veri kaynakları, web indirme durumu |
 | POST | `/api/train` | `{"steps": 1500, "lr": 0.003}` | Eğitimi başlatır (1-100.000 adım) |
 | POST | `/api/stop` | `{}` | Eğitimi durdurur |
@@ -326,6 +339,7 @@ Tüm cevaplar JSON'dur. Sunucu sadece `127.0.0.1`'e bağlanır.
 | `--block-size` | boyuta göre | Bağlam uzunluğu (karakter) |
 | `--batch-size` | boyuta göre | Batch boyutu |
 | `--lr` | boyuta göre | Varsayılan öğrenme oranı (panele de yansır) |
+| `--dropout` | 0.1 | Dropout oranı; veri azken büyük modelde 0.2-0.3 ezberlemeyi frenler |
 | `--selftest` | kapalı | Tokenizer, batch şekilleri, model çıktısı, eğitim, üretim ve 6 QC vakasını test edip çıkar (çıkış kodu 0/1) |
 | `--selftest-steps` | `30` | Self-test sırasında eğitim adımı |
 
@@ -378,6 +392,7 @@ Açılışta terminale seçilen ayarlar ve tahmini parametre sayısı yazılır,
 | `--block-size` | Modelin aynı anda görebildiği karakter sayısı. Parametre değil, bellek ve hız maliyeti. |
 | `--batch-size` | Her adımda işlenen örnek sayısı. Bellek yetmezse düşür. |
 | `--lr` | Öğrenme oranı. Model büyüdükçe düşürülmeli (ör. 3e-4, 2e-4). |
+| `--dropout` | Ezberlemeyi frenler. Doğrulama loss'u eğitimden çok yüksekse 0.2-0.3 deneyin. |
 
 Kaba hesap: **parametre ≈ 12 × n_layer × n_embd²**.
 
