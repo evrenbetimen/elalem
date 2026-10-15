@@ -278,9 +278,21 @@ Skor = geçen kontrol oranı × 100, her uyarı için −3 (en fazla −15).
 
 ---
 
+## Stüdyo (ana sayfa)
+
+`http://127.0.0.1:8080` yalnızca kod üretimi için sade, sohbet tarzı bir ekran açar:
+
+- Ortada bir sohbet akışı, altta yazma kutusu. Enter gönderir, Shift+Enter yeni satır açar.
+- Boş ekranda hazır örnek istekler (giriş formu, kişisel sayfa, ürün kartı, Python fonksiyonu).
+- Kod cevapları renklendirilmiş bir kod kartında gelir. HTML, CSS ve JS için **Kod / Önizleme** sekmesi vardır; kalite kontrolünü geçen çıktı doğrudan önizlemede açılır.
+- Her cevabın altında kalite kontrolü rozeti (geçti / sorun sayısı), bulunan sorunlar, Kopyala, İndir ve Yeniden üret düğmeleri.
+- Ayarlar menüsünde yaratıcılık (sıcaklık), maksimum uzunluk ve top-k; tarayıcıda hatırlanır.
+- Üst çubukta modelin boyutu, cihazı ve eğitim durumu; **Panel** düğmesi `/backend` adresine gider.
+- Açık ve koyu temayı işletim sisteminin ayarına göre seçer, telefonda da çalışır.
+
 ## Kontrol paneli
 
-`http://127.0.0.1:8080`. Koyu tema, masaüstü ve telefonda çalışır, internet bağlantısı gerektirmez.
+`http://127.0.0.1:8080/backend`. Koyu tema, masaüstü ve telefonda çalışır, internet bağlantısı gerektirmez.
 
 | Bölüm | İçerik |
 |---|---|
@@ -299,7 +311,8 @@ Tüm cevaplar JSON'dur. Sunucu sadece `127.0.0.1`'e bağlanır.
 
 | Yöntem | Yol | Gövde | Açıklama |
 |---|---|---|---|
-| GET | `/` | — | Kontrol paneli |
+| GET | `/` | — | Stüdyo (kod üretim ekranı) |
+| GET | `/backend` | — | Kontrol paneli (eğitim, veri, QA/QC) |
 | GET | `/api/status` | — | Eğitim durumu, loss geçmişi, loglar, veri kaynakları, web indirme durumu |
 | POST | `/api/train` | `{"steps": 1500, "lr": 0.003}` | Eğitimi başlatır (1-100.000 adım) |
 | POST | `/api/stop` | `{}` | Eğitimi durdurur |
