@@ -485,7 +485,7 @@ def dis_veri_oku(klasor=VERI_DIR):
     for kok, klasorler, dosyalar in os.walk(klasor):
         klasorler[:] = sorted(d for d in klasorler if not d.startswith(".") and d not in ATLANAN_KLASORLER)
         for ad in sorted(dosyalar):
-            if os.path.splitext(ad)[1].lower() not in VERI_UZANTILAR:
+            if os.path.splitext(ad)[1].lower() not in VERI_UZANTILAR or "contributors" in ad.lower():
                 continue
             yol = os.path.join(kok, ad)
             try:
@@ -522,6 +522,7 @@ class _KodBlokCikarici(HTMLParser):
         self.linkler = []
         self._buf = None
         self._kok = None
+        self._kok_etiket = None
         self._gizli = 0
 
     def _kod_mu(self, tag, attrs):
@@ -542,7 +543,7 @@ class _KodBlokCikarici(HTMLParser):
         if tag in VOID_ETIKETLER:
             return
         if self._buf is None and self._kod_mu(tag, attrs):
-            self._buf, self._kok = [], len(self.stack)
+            self._buf, self._kok, self._kok_etiket = [], len(self.stack), tag
         if tag in self.GIZLI_ETIKETLER:
             self._gizli += 1
         self.stack.append(tag)
@@ -556,7 +557,11 @@ class _KodBlokCikarici(HTMLParser):
                 self._gizli = max(0, self._gizli - 1)
             if self._buf is not None and len(self.stack) == self._kok:
                 blok = "".join(self._buf).strip("\n")
-                if len(blok.strip()) >= 20:
+                # Sitelerin kod bloklarının başına eklediği dil etiketi ("html<p>..." gibi) atılır
+                blok = re.sub(r"^(html|css|js|javascript|json|plain|bash|sh|python|http)(?=[<\n])", "", blok)
+                # Tek satırlık satır içi <code> parçaları (menü / kenar çubuğu öğeleri) kod örneği sayılmaz
+                satir_ici = self._kok_etiket == "code" and "\n" not in blok.strip()
+                if len(blok.strip()) >= 20 and not satir_ici:
                     self.bloklar.append(blok)
                 self._buf, self._kok = None, None
             if t == tag:
@@ -1306,7 +1311,7 @@ class ElalemMotoru:
                 for link in linkler:
                     lu = urllib.parse.urlparse(link)
                     if (lu.scheme in ("http", "https") and lu.netloc == u.netloc and lu.path.startswith(onek)
-                            and link not in gorulen
+                            and link not in gorulen and "contributors.txt" not in lu.path
                             and not re.search(r"\.(png|jpe?g|gif|svg|webp|ico|pdf|zip|mp4|mp3|woff2?)$", lu.path, re.I)):
                         kuyruk.append(link)
                 time.sleep(1.0)  # siteye yük bindirmemek için
