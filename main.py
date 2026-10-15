@@ -480,10 +480,10 @@ TARAYICI_KIMLIGI = "ElalemBot/1.0 (+local educational crawler)"
 
 
 def dis_veri_oku(klasor=VERI_DIR):
-    """veri/ klasöründeki metin dosyalarını okur. Dönüş: (metin, [{'ad', 'karakter'}])"""
+    """veri/ klasöründeki metin dosyalarını okur. Dönüş: ([dosya metni, ...], [{'ad', 'karakter'}])"""
     parcalar, kaynaklar, toplam = [], [], 0
     if not os.path.isdir(klasor):
-        return "", kaynaklar
+        return parcalar, kaynaklar
     for kok, klasorler, dosyalar in os.walk(klasor):
         klasorler[:] = sorted(d for d in klasorler if not d.startswith(".") and d not in ATLANAN_KLASORLER)
         for ad in sorted(dosyalar):
@@ -503,8 +503,8 @@ def dis_veri_oku(klasor=VERI_DIR):
             kaynaklar.append({"ad": os.path.relpath(yol, klasor), "karakter": len(metin)})
             toplam += len(metin)
             if toplam >= MAX_DIS_VERI:
-                return "\n\n".join(parcalar), kaynaklar
-    return "\n\n".join(parcalar), kaynaklar
+                return parcalar, kaynaklar
+    return parcalar, kaynaklar
 
 
 class _KodBlokCikarici(HTMLParser):
@@ -1206,21 +1206,26 @@ class ElalemMotoru:
     # ------------------------------------------------------------ veri
     def _veriyi_yukle(self):
         """Gömülü veri + veri/ klasörü -> train/val tensörleri."""
-        dis, kaynaklar = dis_veri_oku()
-        dis = self.tokenizer.temizle(dis)
+        parcalar, kaynaklar = dis_veri_oku()
+        parcalar = [self.tokenizer.temizle(m) for m in parcalar]
+        dis_uzunluk = sum(len(m) for m in parcalar)
         temel = torch.tensor(self.tokenizer.encode(self.temel_corpus), dtype=torch.long)  # [N_temel]
         nt = int(0.9 * len(temel))
         # Gömülü sohbet biçimi unutulmasın diye, dış veri büyüdükçe gömülü veri tekrarlanır (~%20 pay)
-        tekrar = 1 if not dis else min(50, max(1, math.ceil(0.25 * len(dis) / len(self.temel_corpus))))
+        tekrar = 1 if not dis_uzunluk else min(50, max(1, math.ceil(0.25 * dis_uzunluk / len(self.temel_corpus))))
         train_parca = [temel[:nt]] * tekrar                                               # her biri [nt]
         val_parca = [temel[nt:]]
-        if dis:
-            d = torch.tensor(self.tokenizer.encode(dis), dtype=torch.long)                  # [N_dis]
+        # Her dosya kendi içinde %90 / %10 bölünür. Böylece doğrulama verisi her kaynaktan pay alır;
+        # tek bir kesim yapılsaydı doğrulama yalnızca alfabetik sırada en sondaki dosyalardan oluşurdu.
+        for metin in parcalar:
+            if not metin:
+                continue
+            d = torch.tensor(self.tokenizer.encode(metin + "\n\n"), dtype=torch.long)       # [N_dosya]
             if len(d) >= 20 * self.cfg["block_size"]:
                 nd = int(0.9 * len(d))
                 train_parca.append(d[:nd])
                 val_parca.append(d[nd:])
-            else:                       # çok az dış veri: hepsi eğitime gider
+            else:                       # küçük dosya: hepsi eğitime gider
                 train_parca.append(d)
         train_data = torch.cat(train_parca)                                                # [N_train]
         val_data = torch.cat(val_parca)                                                    # [N_val]
@@ -1228,9 +1233,9 @@ class ElalemMotoru:
             self.train_data, self.val_data = train_data, val_data
         with self.state_lock:
             self.veri_kaynaklari = kaynaklar
-            self.dis_karakter = len(dis)
+            self.dis_karakter = dis_uzunluk
         self.log(f"Veri yüklendi: gömülü {len(self.temel_corpus):,} karakter x{tekrar} + "
-                 f"dış {len(dis):,} karakter ({len(kaynaklar)} dosya) -> "
+                 f"dış {dis_uzunluk:,} karakter ({len(kaynaklar)} dosya) -> "
                  f"train {len(train_data):,} / val {len(val_data):,} token")
 
     def veriyi_yenile(self):
