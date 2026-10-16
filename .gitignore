@@ -2,3 +2,4 @@ __pycache__/
 elalem_checkpoint*.pt
 veri/web/
 *.pt.tmp
+elalem_sifre.txt

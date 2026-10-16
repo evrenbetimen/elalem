@@ -32,10 +32,12 @@ Tensör boyut kısaltmaları:
 
 import argparse
 import ast
+import hmac
 import json
 import math
 import os
 import re
+import secrets
 import sys
 import threading
 import time
@@ -474,22 +476,32 @@ VERI_DIR = os.path.join(SCRIPT_DIR, "veri")
 VERI_UZANTILAR = {".html", ".htm", ".css", ".scss", ".js", ".jsx", ".ts", ".tsx", ".vue",
                   ".py", ".txt", ".md", ".json"}
 ATLANAN_KLASORLER = {"node_modules", "__pycache__", "venv", ".venv", "dist", "build", ".git"}
-MAX_DIS_VERI = 30_000_000        # en fazla ~30 milyon karakter dış veri
+MAX_DIS_VERI = 100_000_000       # en fazla ~100 milyon karakter dış veri (--max-veri ile değişir)
 MAX_SAYFA_BAYT = 3_000_000       # tek bir web sayfası için indirme sınırı
 TARAYICI_KIMLIGI = "ElalemBot/1.0 (+local educational crawler)"
 
 
 def dis_veri_oku(klasor=VERI_DIR):
-    """veri/ klasöründeki metin dosyalarını okur. Dönüş: ([dosya metni, ...], [{'ad', 'karakter'}])"""
-    parcalar, kaynaklar, toplam = [], [], 0
+    """veri/ klasöründeki metin dosyalarını okur.
+    Dönüş: ([dosya metni, ...], [{'ad', 'karakter'}], [{'ad', 'bayt'}])
+    Üçüncü liste MAX_DIS_VERI sınırı dolduğu için okunmayan (ya da yarıda kesilen) dosyalardır;
+    panel bunları açıkça gösterir ki veri sessizce kaybolmasın."""
+    parcalar, kaynaklar, atlanan, toplam = [], [], [], 0
+    gorulen = set()                  # tekrar eden örneklerin özetleri
     if not os.path.isdir(klasor):
-        return parcalar, kaynaklar
+        return parcalar, kaynaklar, atlanan
     for kok, klasorler, dosyalar in os.walk(klasor):
         klasorler[:] = sorted(d for d in klasorler if not d.startswith(".") and d not in ATLANAN_KLASORLER)
         for ad in sorted(dosyalar):
             if os.path.splitext(ad)[1].lower() not in VERI_UZANTILAR or "contributors" in ad.lower():
                 continue
             yol = os.path.join(kok, ad)
+            if toplam >= MAX_DIS_VERI:
+                try:
+                    atlanan.append({"ad": os.path.relpath(yol, klasor), "bayt": os.path.getsize(yol)})
+                except OSError:
+                    pass
+                continue
             try:
                 with open(yol, "r", encoding="utf-8", errors="ignore") as f:
                     metin = f.read().replace("\r\n", "\n").replace("\r", "\n").strip()
@@ -497,14 +509,33 @@ def dis_veri_oku(klasor=VERI_DIR):
                 continue
             if not metin:
                 continue
+            # Sohbet biçimli dosyalarda aynı örnek (istek + cevap) yalnızca bir kez alınır; dosyalar arası da geçerli.
+            # Tekrarlar hem eğitim süresini boşa harcar hem de aynı örnek val'e de düşünce val loss'u ezbere çevirir.
+            atilan = 0
+            if END_TAG in metin:
+                tekil = []
+                for blok in metin.split(END_TAG):
+                    b = blok.strip()
+                    if not b:
+                        continue
+                    h = hash(b)
+                    if h in gorulen:
+                        atilan += 1
+                        continue
+                    gorulen.add(h)
+                    tekil.append(b + "\n" + END_TAG)
+                metin = "\n".join(tekil)
+                if not metin:
+                    kaynaklar.append({"ad": os.path.relpath(os.path.join(kok, ad), klasor), "karakter": 0, "tekrar": atilan})
+                    continue
             if toplam + len(metin) > MAX_DIS_VERI:
+                atlanan.append({"ad": os.path.relpath(yol, klasor) + " (kesildi)",
+                                "bayt": len(metin) - (MAX_DIS_VERI - toplam)})
                 metin = metin[:MAX_DIS_VERI - toplam]
             parcalar.append(metin)
-            kaynaklar.append({"ad": os.path.relpath(yol, klasor), "karakter": len(metin)})
+            kaynaklar.append({"ad": os.path.relpath(yol, klasor), "karakter": len(metin), "tekrar": atilan})
             toplam += len(metin)
-            if toplam >= MAX_DIS_VERI:
-                return parcalar, kaynaklar
-    return parcalar, kaynaklar
+    return parcalar, kaynaklar, atlanan
 
 
 class _KodBlokCikarici(HTMLParser):
@@ -652,11 +683,26 @@ class ElalemTokenizer:
     def temizle(self, text):
         """Dış veriyi sözlüğe uydurur: bilinmeyen karakterler eşdeğeriyle değişir ya da atılır.
         Böylece sözlük (ve model boyutu) dış veri eklense de değişmez."""
-        return "".join(ch if ch in self.stoi else self._ESDEGER.get(ch, "") for ch in text)
+        bilinmeyen = set(text) - self.stoi.keys()
+        if not bilinmeyen:
+            return text
+        return text.translate({ord(ch): self._ESDEGER.get(ch) for ch in bilinmeyen})
 
     def encode(self, text):
         """Metin -> sayı listesi.  'abc' -> [i_a, i_b, i_c]  (uzunluk = T)"""
         return [self.stoi.get(ch, 0) for ch in text]
+
+    def encode_tensor(self, text):
+        """Uzun metin -> [N] tensör. Sözlük 256'dan küçükse uint8 tutulur (int64'e göre 8 kat az bellek);
+        get_batch parçaları long'a çevirir. Karakter başına Python döngüsü yerine str.translate kullanır."""
+        if self.vocab_size > 256:
+            return torch.tensor(self.encode(text), dtype=torch.long)
+        if not hasattr(self, "_ceviri"):
+            self._ceviri = {ord(ch): chr(i) for ch, i in self.stoi.items()}
+        bilinmeyen = set(text) - self.stoi.keys()
+        tablo = dict(self._ceviri, **{ord(ch): "\x00" for ch in bilinmeyen})     # bilinmeyen -> UNK (0)
+        ham = text.translate(tablo).encode("latin-1")
+        return torch.frombuffer(bytearray(ham), dtype=torch.uint8)                 # [N]
 
     def decode(self, ids):
         """Sayı listesi -> metin. UNK token'ları '?' olarak yazılır."""
@@ -821,8 +867,8 @@ def get_batch(data, block_size, batch_size, device):
     bir karakter kaydırılmış hedefler (Y) üretir.
     """
     ix = torch.randint(len(data) - block_size - 1, (batch_size,))           # [B]
-    x = torch.stack([data[i:i + block_size] for i in ix])                   # [B, T]
-    y = torch.stack([data[i + 1:i + 1 + block_size] for i in ix])           # [B, T]
+    x = torch.stack([data[i:i + block_size] for i in ix]).long()            # [B, T] (veri uint8 tutulabilir)
+    y = torch.stack([data[i + 1:i + 1 + block_size] for i in ix]).long()    # [B, T]
     return x.to(device), y.to(device)
 
 
@@ -839,6 +885,8 @@ def kayip_tahmin_et(model, train_data, val_data, cfg, device):
             _, loss = model(X, Y)
             losses[k] = loss.item()
         sonuc[ad] = losses.mean().item()
+        # ortalamanın standart hatası: iki eval arasındaki fark bundan küçükse gürültüdür
+        sonuc[ad + "_se"] = (losses.std().item() / math.sqrt(len(losses))) if len(losses) > 1 else 0.0
     if was_training:
         model.train()
     return sonuc
@@ -848,7 +896,7 @@ def train_model(model, optimizer, train_data, val_data, cfg, steps, device,
                 on_step=None, on_eval=None, stop_event=None, lock=None, start_step=0):
     """
     AdamW optimizer + CrossEntropyLoss (model.criterion) ile eğitim döngüsü.
-    on_step(step, loss, saniye) ve on_eval(step, {'train':..,'val':..}) geri çağrımları
+    on_step(step, loss, saniye, grad_norm) ve on_eval(step, {'train':..,'val':..,'sure':..}) geri çağrımları
     arayüze canlı veri akıtmak için kullanılır.
     """
     model.train()
@@ -866,18 +914,22 @@ def train_model(model, optimizer, train_data, val_data, cfg, steps, device,
             _, loss = model(X, Y)                                 # loss: skaler
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)   # kırpmadan önceki norm
             optimizer.step()
             loss_val = loss.item()
+            grad_norm = float(grad_norm)
+            adim_sure = time.time() - t0
             eval_sonuc = None
             if step % cfg["eval_interval"] == 0 or i == steps - 1:
+                t_eval = time.time()
                 eval_sonuc = kayip_tahmin_et(model, train_data, val_data, cfg, device)
+                eval_sonuc["sure"] = time.time() - t_eval
         finally:
             if lock is not None:
                 lock.release()
         son_adim = step
         if on_step is not None:
-            on_step(step, loss_val, time.time() - t0)
+            on_step(step, loss_val, adim_sure, grad_norm)
         if eval_sonuc is not None and on_eval is not None:
             on_eval(step, eval_sonuc)
     return son_adim
@@ -1167,6 +1219,39 @@ def qa_qc_dogrula(kod):
 # 6. ELALEM MOTORU (Model + Eğitim Durumu + Üretim)
 # =============================================================================
 
+def sistem_bilgisi():
+    """Cihaz belleği, süreç belleği ve sistem yükü (yalnızca torch + standart kütüphane)."""
+    b = {"cpu": os.cpu_count()}
+    try:
+        b["yuk"] = [round(x, 2) for x in os.getloadavg()]          # 1, 5, 15 dakikalık yük ortalaması
+    except (OSError, AttributeError):
+        pass
+    try:
+        if DEVICE.type == "cuda":
+            b["cihaz_ayrilan"] = torch.cuda.memory_allocated()
+            b["cihaz_tepe"] = torch.cuda.max_memory_allocated()
+            b["cihaz_toplam"] = torch.cuda.get_device_properties(0).total_memory
+        elif DEVICE.type == "mps":
+            b["cihaz_ayrilan"] = torch.mps.current_allocated_memory()
+            b["cihaz_surucu"] = torch.mps.driver_allocated_memory()
+            if hasattr(torch.mps, "recommended_max_memory"):
+                b["cihaz_toplam"] = torch.mps.recommended_max_memory()
+    except Exception:
+        pass
+    try:
+        import resource
+        tepe = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        b["surec_tepe"] = tepe if sys.platform == "darwin" else tepe * 1024   # macOS bayt, Linux KB verir
+    except Exception:
+        pass
+    try:
+        with open("/proc/self/statm") as f:
+            b["surec"] = int(f.read().split()[1]) * os.sysconf("SC_PAGE_SIZE")
+    except Exception:
+        pass
+    return b
+
+
 class ElalemMotoru:
     def __init__(self, cfg, corpus):
         self.cfg = dict(cfg)
@@ -1182,6 +1267,20 @@ class ElalemMotoru:
         self.egitimde = False
         self.hedef_adim = 0
         self.adim_suresi = 0.0
+        self.log_sayaci = 0                   # şimdiye dek yazılan log satırı (canlı akış imleci)
+
+        # ---- telemetri (canlı akış /api/telemetri/akis) ----
+        self.tel_adimlar = deque(maxlen=50_000)   # (adım, loss, ms, grad_norm, zaman)
+        self.tel_evaller = []                     # (adım, train, val, train_se, val_se, eval_sn)
+        self.ema_loss = None
+        self.en_iyi_val = None
+        self.en_iyi_adim = 0
+        self.eval_beri = 0                        # en iyi val'den bu yana kaç değerlendirme geçti
+        self.kosu = {"bas_adim": 0, "bas_zaman": 0.0}
+        self.son_kayit = None                     # {"adim", "zaman"}
+        self.erken_durdur = {"acik": False, "sabir": 6}
+        self.atlanan_veri = []                    # MAX_DIS_VERI sınırı yüzünden okunmayan dosyalar
+        self.sizinti = {"durum": "bekliyor"}      # val pencerelerinin train içinde birebir geçme oranı
 
         self.temel_corpus = corpus
         self.veri_kaynaklari = []
@@ -1206,10 +1305,10 @@ class ElalemMotoru:
     # ------------------------------------------------------------ veri
     def _veriyi_yukle(self):
         """Gömülü veri + veri/ klasörü -> train/val tensörleri."""
-        parcalar, kaynaklar = dis_veri_oku()
+        parcalar, kaynaklar, atlanan = dis_veri_oku()
         parcalar = [self.tokenizer.temizle(m) for m in parcalar]
         dis_uzunluk = sum(len(m) for m in parcalar)
-        temel = torch.tensor(self.tokenizer.encode(self.temel_corpus), dtype=torch.long)  # [N_temel]
+        temel = self.tokenizer.encode_tensor(self.temel_corpus)                           # [N_temel]
         nt = int(0.9 * len(temel))
         # Gömülü sohbet biçimi unutulmasın diye, dış veri büyüdükçe gömülü veri tekrarlanır (~%20 pay)
         tekrar = 1 if not dis_uzunluk else min(50, max(1, math.ceil(0.25 * dis_uzunluk / len(self.temel_corpus))))
@@ -1220,7 +1319,7 @@ class ElalemMotoru:
         for metin in parcalar:
             if not metin:
                 continue
-            d = torch.tensor(self.tokenizer.encode(metin + "\n\n"), dtype=torch.long)       # [N_dosya]
+            d = self.tokenizer.encode_tensor(metin + "\n\n")                                # [N_dosya]
             if len(d) >= 20 * self.cfg["block_size"]:
                 nd = int(0.9 * len(d))
                 train_parca.append(d[:nd])
@@ -1234,9 +1333,43 @@ class ElalemMotoru:
         with self.state_lock:
             self.veri_kaynaklari = kaynaklar
             self.dis_karakter = dis_uzunluk
+            self.atlanan_veri = atlanan
+            self.sizinti = {"durum": "olculuyor"}
+        if atlanan:
+            self.log(f"UYARI: {MAX_DIS_VERI:,} karakter sınırı doldu; {len(atlanan)} dosya "
+                     f"({sum(a['bayt'] for a in atlanan):,} bayt) eğitime girmedi.")
+        threading.Thread(target=self._sizinti_olc, args=(train_data, val_data), daemon=True).start()
+        tekrar_atilan = sum(k.get("tekrar", 0) for k in kaynaklar)
+        if tekrar_atilan:
+            self.log(f"Tekilleştirme: {tekrar_atilan:,} tekrar eden örnek atıldı.")
         self.log(f"Veri yüklendi: gömülü {len(self.temel_corpus):,} karakter x{tekrar} + "
                  f"dış {dis_uzunluk:,} karakter ({len(kaynaklar)} dosya) -> "
                  f"train {len(train_data):,} / val {len(val_data):,} token")
+
+    def _sizinti_olc(self, train_data, val_data, pencere=128, ornek=200):
+        """Doğrulama verisinden rastgele 128 karakterlik pencereler alır ve kaçının eğitim verisinde
+        birebir geçtiğini sayar. Yüksek oran = val loss ezberi ölçüyor, genellemeyi değil."""
+        try:
+            if len(val_data) <= pencere or len(train_data) <= pencere:
+                raise ValueError("veri çok kısa")
+            tk = self.tokenizer
+            tablo = ["?"] + [tk.itos.get(i, "?") for i in range(1, tk.vocab_size)]    # hızlı decode
+            train_metin = "".join(map(tablo.__getitem__, train_data.tolist()))
+            g = torch.Generator().manual_seed(0)
+            ix = torch.randint(len(val_data) - pencere, (ornek,), generator=g)              # [ornek]
+            bulunan = 0
+            for i in ix.tolist():
+                if "".join(map(tablo.__getitem__, val_data[i:i + pencere].tolist())) in train_metin:
+                    bulunan += 1
+            sonuc = {"durum": "tamam", "oran": bulunan / ornek, "ornek": ornek, "pencere": pencere}
+        except Exception as e:
+            sonuc = {"durum": "hata", "hata": str(e)}
+        with self.state_lock:
+            if self.train_data is train_data:            # bu sırada veri yenilendiyse eski sonucu yazma
+                self.sizinti = sonuc
+        if sonuc["durum"] == "tamam":
+            self.log(f"Sızıntı ölçümü: val'deki {pencere} karakterlik pencerelerin %{sonuc['oran'] * 100:.1f}'i "
+                     f"eğitim verisinde birebir geçiyor.")
 
     def veriyi_yenile(self):
         if self.egitimde:
@@ -1347,6 +1480,7 @@ class ElalemMotoru:
         satir = f"[{time.strftime('%H:%M:%S')}] {mesaj}"
         with self.state_lock:
             self.logs.append(satir)
+            self.log_sayaci += 1
         print(satir, flush=True)
 
     # ------------------------------------------------------------- checkpoint
@@ -1359,6 +1493,8 @@ class ElalemMotoru:
                 "adim": self.adim,
             }, self.ckpt_yolu + ".tmp")
             os.replace(self.ckpt_yolu + ".tmp", self.ckpt_yolu)   # yarıda kalan yazım eski kaydı bozmasın
+            with self.state_lock:
+                self.son_kayit = {"adim": self.adim, "zaman": time.time()}
             self.log(f"Model kaydedildi: {os.path.basename(self.ckpt_yolu)}")
         except Exception as e:
             self.log(f"Kaydetme hatası: {e}")
@@ -1407,18 +1543,39 @@ class ElalemMotoru:
         self.log(f"Eğitim başladı ({adim_sayisi} adım, cihaz={DEVICE}).")
         t_bas = time.time()
 
-        def on_step(step, loss, sure):
+        with self.state_lock:
+            self.kosu = {"bas_adim": self.adim, "bas_zaman": time.time()}
+
+        def on_step(step, loss, sure, grad_norm=0.0):
             with self.state_lock:
                 self.adim = step
                 self.adim_suresi = sure
                 self.loss_gecmisi.append((step, loss))
+                self.tel_adimlar.append((step, loss, sure * 1000, grad_norm, time.time()))
+                if math.isfinite(loss):
+                    self.ema_loss = loss if self.ema_loss is None else 0.98 * self.ema_loss + 0.02 * loss
+            if not math.isfinite(loss):
+                self.log(f"KRİTİK: adım {step} loss {loss} (sayı değil). Eğitim durduruluyor.")
+                self.stop_event.set()
             if step % 25 == 0:
                 self.log(f"adım {step:5d} | loss {loss:.4f} | {sure * 1000:.0f} ms/adım")
 
         def on_eval(step, s):
             with self.state_lock:
                 self.val_gecmisi.append((step, s["train"], s["val"]))
+                self.tel_evaller.append((step, s["train"], s["val"], s.get("train_se", 0.0),
+                                         s.get("val_se", 0.0), s.get("sure", 0.0)))
+                # gürültü payı: standart hatanın yarısından fazla düşüş "gerçek iyileşme" sayılır
+                if self.en_iyi_val is None or s["val"] < self.en_iyi_val - 0.5 * s.get("val_se", 0.0):
+                    self.en_iyi_val, self.en_iyi_adim, self.eval_beri = s["val"], step, 0
+                else:
+                    self.eval_beri += 1
+                ed, beri = dict(self.erken_durdur), self.eval_beri
             self.log(f"DEĞERLENDİRME adım {step} | train {s['train']:.4f} | val {s['val']:.4f}")
+            if ed["acik"] and beri >= ed["sabir"] and not self.stop_event.is_set():
+                self.log(f"Erken durdurma: val {beri} değerlendirmedir iyileşmedi "
+                         f"(en iyi {self.en_iyi_val:.4f}, adım {self.en_iyi_adim}). Eğitim durduruluyor.")
+                self.stop_event.set()
             if step % 250 == 0:         # program kapanırsa en fazla 250 adım kaybolsun
                 with self.lock:
                     self._checkpoint_kaydet()
@@ -1503,6 +1660,179 @@ class ElalemMotoru:
                 "loglar": list(self.logs)[-120:],
             }
 
+    # ------------------------------------------------------------- telemetri
+    def erken_durdurma_ayarla(self, acik, sabir):
+        with self.state_lock:
+            self.erken_durdur = {"acik": bool(acik), "sabir": max(2, min(int(sabir), 100))}
+            ed = dict(self.erken_durdur)
+        self.log(f"Erken durdurma {'açık' if ed['acik'] else 'kapalı'} (sabır: {ed['sabir']} değerlendirme).")
+        return ed
+
+    def telemetri(self, adim_sonra=None, log_sonra=None, eval_sonra=None):
+        """Canlı telemetri paketi.
+        adim_sonra/eval_sonra/log_sonra verilirse yalnızca o imleçten sonraki yeni kayıtlar döner
+        (SSE akışı her yarım saniyede sadece farkı gönderir); verilmezse tüm geçmiş seyreltilerek döner."""
+        cfg = self.cfg
+        with self.state_lock:
+            adimlar = self.tel_adimlar
+            if adim_sonra is None:
+                liste = list(adimlar)
+                atla = max(1, len(liste) // 3000)            # ilk paket en fazla ~3000 nokta
+                yeni = liste[::atla]
+                if liste and yeni[-1] is not liste[-1]:
+                    yeni.append(liste[-1])
+            else:
+                yeni = []
+                for kayit in reversed(adimlar):              # yeni kayıtlar sondadır
+                    if kayit[0] <= adim_sonra:
+                        break
+                    yeni.append(kayit)
+                yeni.reverse()
+            son = list(adimlar)[-300:] if adimlar else []
+            evaller = [e for e in self.tel_evaller if eval_sonra is None or e[0] > eval_sonra]
+            tum_eval = list(self.tel_evaller)
+            yeni_log = []
+            if log_sonra is not None and self.log_sayaci > log_sonra:
+                yeni_log = list(self.logs)[-min(len(self.logs), self.log_sayaci - log_sonra):]
+            elif log_sonra is None:
+                yeni_log = list(self.logs)[-80:]
+            ozet = {
+                "adim": self.adim, "hedef_adim": self.hedef_adim, "egitimde": self.egitimde,
+                "kosu": dict(self.kosu), "ema_loss": self.ema_loss,
+                "en_iyi_val": self.en_iyi_val, "en_iyi_adim": self.en_iyi_adim, "eval_beri": self.eval_beri,
+                "son_kayit": self.son_kayit, "erken_durdur": dict(self.erken_durdur),
+                "sizinti": dict(self.sizinti), "log_sayaci": self.log_sayaci,
+                "atlanan": {"dosya": len(self.atlanan_veri), "bayt": sum(a["bayt"] for a in self.atlanan_veri),
+                            "liste": self.atlanan_veri[:60]},
+            }
+        simdi = time.time()
+        bt = cfg["batch_size"] * cfg["block_size"]                       # bir adımda görülen token (B*T)
+        n_train, n_val = len(self.train_data), len(self.val_data)
+        ozet.update({
+            "zaman": simdi, "cihaz": str(DEVICE), "parametre": self.model.parametre_sayisi(),
+            "config": {k: cfg[k] for k in ("n_embd", "n_head", "n_layer", "block_size", "batch_size",
+                                           "dropout", "eval_interval", "eval_iters")},
+            "lr": self.optimizer.param_groups[0]["lr"],
+            "train_token": n_train, "val_token": n_val, "adim_token": bt,
+            "gorulen_token": self.adim * bt,
+            "tur": self.adim * bt / max(1, n_train),                    # eğitim verisinin kaç kez görüldüğü
+        })
+        if son:
+            ms = sorted(k[2] for k in son[-50:])
+            ozet["adim_ms"] = ms[len(ms) // 2]                          # medyan: tek tük yavaş adım saptırmasın
+            ozet["token_sn"] = bt / (ozet["adim_ms"] / 1000) if ozet["adim_ms"] > 0 else 0.0
+            gn = [k[3] for k in son[-100:]]
+            ozet["grad_norm"] = son[-1][3]
+            ozet["grad_norm_ort"] = sum(gn) / len(gn)
+            ozet["kirpma_orani"] = sum(g > 1.0 for g in gn) / len(gn)
+            ozet["son_loss"] = son[-1][1]
+            # duvar saati hızı (değerlendirmeler dahil) -> kalan süre tahmini
+            pencere = son[-100:]
+            if len(pencere) >= 2 and pencere[-1][4] > pencere[0][4]:
+                sn_adim = (pencere[-1][4] - pencere[0][4]) / (pencere[-1][0] - pencere[0][0])
+                ozet["sn_adim"] = sn_adim
+                if ozet["egitimde"] and self.hedef_adim > self.adim:
+                    ozet["eta_sn"] = (self.hedef_adim - self.adim) * sn_adim
+            ozet["son_adim_yasi"] = simdi - son[-1][4]
+        if ozet["egitimde"] and ozet["kosu"]["bas_zaman"]:
+            ozet["gecen_sn"] = simdi - ozet["kosu"]["bas_zaman"]
+        if tum_eval:
+            e = tum_eval[-1]
+            ozet.update({"eval_train": e[1], "eval_val": e[2], "train_se": e[3], "val_se": e[4],
+                         "fark": e[2] - e[1], "oran": e[2] / e[1] if e[1] > 0 else None})
+        ozet["sistem"] = sistem_bilgisi()
+        ozet["teshis"] = self._teshis(ozet, tum_eval, son)
+        return {
+            "ozet": ozet,
+            "adimlar": [[k[0], round(k[1], 5), round(k[2], 1), round(k[3], 4)] for k in yeni],
+            "evaller": [[e[0], round(e[1], 5), round(e[2], 5), round(e[3], 5), round(e[4], 5), round(e[5], 2)]
+                        for e in evaller],
+            "loglar": yeni_log,
+        }
+
+    def _teshis(self, o, evaller, son):
+        """Ölçümlerden otomatik kararlar: her biri {seviye: kritik/uyari/bilgi/iyi, baslik, detay, oneri}."""
+        k = []
+
+        def ekle(seviye, baslik, detay, oneri=""):
+            k.append({"seviye": seviye, "baslik": baslik, "detay": detay, "oneri": oneri})
+
+        son_loss = o.get("son_loss")
+        if son_loss is not None and not math.isfinite(son_loss):
+            ekle("kritik", "Loss sayı değil (NaN/inf)", "Eğitim sayısal olarak patladı.",
+                 "Öğrenme oranını yarıya indir ve son checkpoint'ten yeniden başlat.")
+        a = o["atlanan"]
+        if a["dosya"]:
+            ekle("kritik", f"{a['dosya']} dosya eğitime girmiyor",
+                 f"{MAX_DIS_VERI / 1e6:.0f}M karakter sınırı alfabetik sırayla doldu; {a['bayt'] / 1e6:.1f} MB veri sessizce dışarıda kaldı.",
+                 "Tekrarlı dosyaları ayıkla ya da eğitmek istemediğin dosyaları veri/ dışına taşı. Sınır sırayla dolduğu için dosya adları hangi verinin gireceğini belirliyor.")
+        sz = o["sizinti"]
+        if sz.get("durum") == "tamam":
+            oran = sz["oran"]
+            if oran >= 0.3:
+                ekle("kritik", f"Doğrulama verisi sızıntılı (%{oran * 100:.0f})",
+                     f"Val'deki {sz['pencere']} karakterlik pencerelerin %{oran * 100:.0f}'i eğitim verisinde birebir var. Düşük val loss ezberi ölçüyor.",
+                     "Birebir aynı örnekler zaten atılıyor; bu oran şablonla üretilmiş verinin ortak kalıplarından geliyor. "
+                     "Sentetik/şablon verinin payını azalt, çeşitli gerçek kod ekle.")
+            elif oran >= 0.1:
+                ekle("uyari", f"Doğrulama verisinde kısmi sızıntı (%{oran * 100:.0f})",
+                     "Val'in bir bölümü eğitimde birebir geçiyor; val loss iyimser.", "Tekrarlı örnekleri ayıkla.")
+            else:
+                ekle("iyi", f"Sızıntı düşük (%{oran * 100:.0f})", "Val loss genellemeyi makul ölçüyor.")
+        if len(evaller) >= 3:
+            f = [e[2] - e[1] for e in evaller[-3:]]
+            oran = o.get("oran") or 1.0
+            if f[-1] > 0.15 and oran > 1.3 and f[-1] > f[0]:
+                ekle("kritik", "Aşırı öğrenme (overfitting) başladı",
+                     f"val − train farkı {f[-1]:.3f} ve büyüyor (val/train = {oran:.2f}).",
+                     "Eğitimi durdur; en iyi val adımı " + str(o["en_iyi_adim"]) + ". Daha fazla tekil veri ya da dropout gerekir.")
+            elif f[-1] > 0.1:
+                ekle("uyari", "Genelleme farkı açılıyor", f"val − train = {f[-1]:.3f}.",
+                     "Erken durdurmayı aç ki val iyileşmeyince eğitim kendiliğinden dursun.")
+        if o["eval_beri"] >= 6 and evaller:
+            ekle("uyari", "Doğrulama kaybı ilerlemiyor",
+                 f"Son {o['eval_beri']} değerlendirmedir (~{o['eval_beri'] * self.cfg['eval_interval']} adım) en iyi val {o['en_iyi_val']:.4f} geçilemedi.",
+                 "Öğrenme oranını düşür (örn. yarıya) ya da eğitimi bitir; sabit lr ile platoda kalmak zaman kaybı.")
+        tur = o["tur"]
+        if tur >= 20:
+            ekle("kritik", f"Veri {tur:.0f} kez görüldü", "Bu kadar tekrar küçük veride ezberi garantiler.",
+                 "Daha fazla tekil veri ekle ya da eğitimi bitir.")
+        elif tur >= 5:
+            ekle("uyari", f"Veri {tur:.1f} kez görüldü", "Karakter seviyesi küçük modelde 5 turdan sonra ezber riski artar.",
+                 "Val ile train arasındaki farkı izle.")
+        kr = o.get("kirpma_orani")
+        if kr is not None and kr > 0.5 and o["adim"] > 200:
+            ekle("uyari", f"Gradyanların %{kr * 100:.0f}'i kırpılıyor",
+                 f"Son 100 adımda grad normu 1.0'ı aştı (ort. {o['grad_norm_ort']:.2f}).",
+                 "Öğrenme oranı bu aşama için yüksek olabilir; lr'yi düşürmeyi dene.")
+        ema = o.get("ema_loss")
+        if son_loss is not None and ema and math.isfinite(son_loss) and son_loss > 1.8 * ema and o["adim"] > 100:
+            ekle("uyari", "Ani loss sıçraması", f"Son adım {son_loss:.3f}, ortalama {ema:.3f}.",
+                 "Tek seferlikse önemsiz; tekrarlıyorsa lr yüksek.")
+        if o.get("son_adim_yasi") is not None and o["egitimde"] and o["son_adim_yasi"] > 60:
+            ekle("kritik", "Eğitim takıldı", f"{o['son_adim_yasi']:.0f} saniyedir yeni adım yok.",
+                 "Terminaldeki hatayı kontrol et; gerekirse Durdur ve yeniden başlat.")
+        if len(son) >= 300 and o["egitimde"]:
+            ilk = sorted(x[2] for x in son[:50])
+            son_ms = sorted(x[2] for x in son[-50:])
+            if ilk and son_ms and son_ms[len(son_ms) // 2] > 1.5 * ilk[len(ilk) // 2]:
+                ekle("uyari", "Adımlar yavaşladı",
+                     f"Medyan {ilk[len(ilk) // 2]:.0f} ms'den {son_ms[len(son_ms) // 2]:.0f} ms'ye çıktı.",
+                     "Mac ısınıp yavaşlamış ya da bellek takasa (swap) düşmüş olabilir; başka uygulamaları kapat.")
+        if self.cfg["eval_iters"] < 30 and evaller:
+            ekle("bilgi", f"Val ölçümü gürültülü (± {o.get('val_se', 0):.4f})",
+                 f"Her değerlendirme yalnızca {self.cfg['eval_iters']} batch'in ortalaması.",
+                 "İki değerlendirme arasındaki bu kadarlık fark gerçek değil; trende bak.")
+        sk = o.get("son_kayit")
+        kaydedilmemis = o["adim"] - (sk["adim"] if sk else o["kosu"]["bas_adim"])
+        if o["egitimde"] and kaydedilmemis > 300:
+            ekle("bilgi", "Kaydedilmemiş ilerleme", f"Son kayıttan bu yana {kaydedilmemis} adım geçti.",
+                 "Model her 250 adımda ve durdurulunca kaydedilir.")
+        if not any(x["seviye"] in ("kritik", "uyari") for x in k):
+            ekle("iyi", "Ciddi bir sorun görünmüyor", "Kayıplar düşüyor, gradyanlar ve hız normal.")
+        sira = {"kritik": 0, "uyari": 1, "bilgi": 2, "iyi": 3}
+        return sorted(k, key=lambda x: sira[x["seviye"]])
+
 
 # =============================================================================
 # 7. MODERN UI/UX - KOYU TEMALI KONTROL PANELİ (HTML + CSS + JS, harici kütüphane yok)
@@ -1520,7 +1850,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     --text: #1f1e1c; --muted: #6f6b62; --faint: #9a958a;
     --accent: #1f6f63; --accent-hover: #175a50; --accent-soft: #e1efec;
     --ok: #2f7d4f; --ok-bg: #e6f2ea; --err: #b4372f; --err-bg: #f9e4e1; --warn: #9a6a12; --warn-bg: #f7eedb;
-    --code-bg: #f7f6f2; --chart-train: #1f6f63; --chart-val: #c98a2b; --chart-grid: #ece8df;
+    --code-bg: #f7f6f2; --chart-train: #1f6f63; --chart-val: #c98a2b; --chart-grid: #ece8df; --chart-3: #6b5bb5;
     --shadow: 0 1px 2px rgba(31,30,28,.04), 0 2px 8px rgba(31,30,28,.04);
     --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
     --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
@@ -1532,7 +1862,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
       --text: #ece9e2; --muted: #a8a397; --faint: #7d786d;
       --accent: #3fa391; --accent-hover: #52b5a3; --accent-soft: #1e332f;
       --ok: #6cc28f; --ok-bg: #1f3328; --err: #ef8a80; --err-bg: #3d2420; --warn: #e0b45c; --warn-bg: #3a3020;
-      --code-bg: #201f1c; --chart-train: #3fa391; --chart-val: #e0b45c; --chart-grid: #34322e;
+      --code-bg: #201f1c; --chart-train: #3fa391; --chart-val: #e0b45c; --chart-grid: #34322e; --chart-3: #a597e8;
       --shadow: 0 1px 2px rgba(0,0,0,.2);
     }
   }
@@ -1649,6 +1979,52 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     border-radius: 10px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 50; max-width: 90vw; }
   .toast.show { opacity: 1; }
 
+  /* Canlı telemetri */
+  .tel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .pill { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--muted); background: var(--surface2);
+    border-radius: 99px; padding: 4px 11px; }
+  .pill.on { color: var(--ok); background: var(--ok-bg); }
+  .pill.off { color: var(--err); background: var(--err-bg); }
+  .tkpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 16px 0; }
+  .tkpi { background: var(--surface2); border-radius: 11px; padding: 11px 13px; min-width: 0; }
+  .tkpi span { display: block; font-size: 12px; color: var(--muted); }
+  .tkpi b { display: block; font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tkpi small { display: block; font-size: 12px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+  .tkpi .progress { margin-top: 7px; height: 4px; }
+  .tkpi.kotu b { color: var(--err); } .tkpi.dikkat b { color: var(--warn); } .tkpi.iyi b { color: var(--ok); }
+  .kararlar { display: flex; flex-direction: column; gap: 8px; }
+  .karar { border-left: 3px solid var(--faint); background: var(--surface2); border-radius: 0 10px 10px 0; padding: 9px 12px; }
+  .karar.kritik { border-color: var(--err); background: var(--err-bg); } .karar.uyari { border-color: var(--warn); background: var(--warn-bg); }
+  .karar.iyi { border-color: var(--ok); } .karar.bilgi { border-color: var(--accent); }
+  .karar .kb { font-weight: 600; display: flex; gap: 8px; align-items: baseline; }
+  .karar .kb em { font-style: normal; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); font-weight: 500; }
+  .karar .kd { font-size: 13px; color: var(--muted); }
+  .karar .ko { font-size: 13px; margin-top: 3px; }
+  .karar .ko::before { content: "Karar: "; font-weight: 600; }
+  .ed-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 13px; }
+  .ed-row input[type=number] { width: 72px; padding: 5px 8px; }
+  .ed-row label { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
+  .ed-row input[type=checkbox] { accent-color: var(--accent); width: 16px; height: 16px; }
+  .charts { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; margin-top: 16px; }
+  .cbox { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px 8px; min-width: 0; }
+  .cbox.genis { grid-column: 1 / -1; }
+  .cbox-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; font-weight: 600; }
+  .cbox-head .legend { margin: 0; font-weight: 400; }
+  .cbox .cw { height: 190px; margin-top: 8px; }
+  .cbox.genis .cw { height: 280px; }
+  .meter { margin: 8px 0 12px; }
+  .meter .ml { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--muted); }
+  .meter .ml b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .meter .progress { margin-top: 5px; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: 13px; }
+  .kv dt { color: var(--muted); } .kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
+  .grid3 > div { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; min-width: 0; }
+  .grid3 h3 { margin: 0 0 8px; font-size: 13px; font-weight: 600; }
+  .mini-list { list-style: none; margin: 8px 0 0; padding: 0; max-height: 130px; overflow: auto; font: 12px/1.6 var(--mono); color: var(--muted); }
+  .tlog { font: 12px/1.6 var(--mono); background: var(--code-bg); border-radius: 10px; padding: 8px 10px; height: 170px; overflow: auto; white-space: pre-wrap; color: var(--muted); }
+  @media (max-width: 1100px) { .grid3 { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 900px) { .charts { grid-template-columns: minmax(0, 1fr); } }
   @media (max-width: 1100px) { .grid2 { grid-template-columns: minmax(0, 1fr); } }
   @media (max-width: 760px) {
     body { grid-template-columns: minmax(0, 1fr); }
@@ -1658,7 +2034,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     aside a.nav { padding: 6px 9px; white-space: nowrap; } aside a.nav span { display: none; }
     .side-foot { margin: 0 0 0 auto; flex-direction: row; }
     .content { padding: 18px 16px 48px; }
-    .kpis, .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .kpis, .stats, .tkpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .controls { grid-template-columns: minmax(0, 1fr); }
   }
 </style>
@@ -1670,7 +2046,8 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
 <aside>
   <div class="brand"><svg><use href="#logo"/></svg><div>Elalem<small>Model paneli</small></div></div>
   <div class="nav-label">Model</div>
-  <a class="nav on" href="#egitim"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 17l6-6 4 4 8-8M15 7h6v6"/></svg><span>Eğitim</span></a>
+  <a class="nav on" href="#telemetri"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><span>Canlı telemetri</span></a>
+  <a class="nav" href="#egitim"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 17l6-6 4 4 8-8M15 7h6v6"/></svg><span>Eğitim</span></a>
   <a class="nav" href="#veri"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg><span>Veri</span></a>
   <div class="nav-label">Test</div>
   <a class="nav" href="#playground"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 9l-4 3 4 3M16 9l4 3-4 3M14 5l-4 14"/></svg><span>Playground</span></a>
@@ -1678,6 +2055,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   <div class="side-foot">
     <div class="status-card"><div class="row1"><span class="dot" id="liveDot"></span><span id="statusText">Hazır</span></div><div class="row2">Cihaz: <span id="device">-</span></div></div>
     <a class="nav" href="/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg><span>Stüdyoya dön</span></a>
+    <a class="nav" href="/giris" id="cikisBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg><span>Çıkış yap</span></a>
   </div>
 </aside>
 
@@ -1691,6 +2069,54 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     <div class="kpi"><span>Veri (token)</span><b id="tokens">-</b></div>
     <div class="kpi"><span>Doğrulama loss</span><b id="kpiVal">-</b></div>
   </div>
+
+  <section class="panel" id="telemetri">
+    <div class="tel-head">
+      <div><h2>Canlı telemetri</h2><p class="sub" style="margin-bottom:0">Her adımın ölçümü sunucudan anlık akar (Server-Sent Events). Kararlar ölçümlerden otomatik çıkarılır.</p></div>
+      <span class="pill" id="telBag"><span class="dot" id="telDot"></span><span id="telBagT">Bağlanıyor</span></span>
+    </div>
+    <div class="tkpis">
+      <div class="tkpi"><span>Adım</span><b id="tAdim">-</b><small id="tAdimS">-</small><div class="progress"><div id="tProg"></div></div></div>
+      <div class="tkpi"><span>Kalan süre</span><b id="tEta">-</b><small id="tEtaS">-</small></div>
+      <div class="tkpi"><span>Hız</span><b id="tHiz">-</b><small id="tHizS">-</small></div>
+      <div class="tkpi"><span>Eğitim loss (ortalama)</span><b id="tLoss">-</b><small id="tLossS">-</small></div>
+      <div class="tkpi" id="tValK"><span>Doğrulama loss</span><b id="tVal">-</b><small id="tValS">-</small></div>
+      <div class="tkpi" id="tFarkK"><span>Genelleme farkı (val − train)</span><b id="tFark">-</b><small id="tFarkS">-</small></div>
+      <div class="tkpi" id="tTurK"><span>Veri turu</span><b id="tTur">-</b><small id="tTurS">-</small></div>
+      <div class="tkpi" id="tGnK"><span>Gradyan normu</span><b id="tGn">-</b><small id="tGnS">-</small></div>
+    </div>
+
+    <div class="cbox-head" style="margin-bottom:8px">Kararlar</div>
+    <div class="kararlar" id="kararlar"><div class="karar"><div class="kd">İlk ölçüm bekleniyor…</div></div></div>
+    <div class="ed-row">
+      <label><input type="checkbox" id="edAcik"> Erken durdurma</label>
+      <span>val</span><input type="number" id="edSabir" min="2" max="100" value="6"><span>değerlendirme iyileşmezse eğitimi durdur ve kaydet</span>
+      <button class="btn-ghost" id="edKaydet" style="padding:5px 12px;font-size:12.5px">Uygula</button>
+    </div>
+
+    <div class="charts">
+      <div class="cbox genis">
+        <div class="cbox-head"><span>Kayıp</span>
+          <span style="display:flex;gap:8px;flex-wrap:wrap">
+            <span class="seg" id="tAralik"><button data-n="0" class="on">Tümü</button><button data-n="1000">Son 1000</button><button data-n="200">Son 200</button></span>
+            <span class="seg" id="tOlcek"><button data-l="0" class="on">Doğrusal</button><button data-l="1">Log</button></span>
+          </span></div>
+        <div class="legend" style="margin-top:6px"><span><i style="background:var(--chart-grid)"></i>Adım loss</span><span><i style="background:var(--chart-train)"></i>Ortalama (EMA)</span><span><i style="background:var(--chart-3)"></i>Eval train</span><span><i style="background:var(--chart-val)"></i>Eval val ± hata</span></div>
+        <div class="cw"><canvas id="cLoss"></canvas></div>
+      </div>
+      <div class="cbox"><div class="cbox-head"><span>Genelleme farkı</span><span class="legend"><span><i style="background:var(--chart-val)"></i>val − train</span></span></div><div class="cw"><canvas id="cFark"></canvas></div></div>
+      <div class="cbox"><div class="cbox-head"><span>Gradyan normu</span><span class="legend"><span><i style="background:var(--chart-3)"></i>kırpma öncesi</span><span><i style="background:var(--err)"></i>kırpma sınırı 1.0</span></span></div><div class="cw"><canvas id="cGn"></canvas></div></div>
+      <div class="cbox genis"><div class="cbox-head"><span>Adım süresi</span><span class="legend"><span><i style="background:var(--chart-train)"></i>ms / adım (değerlendirme hariç)</span></span></div><div class="cw" style="height:150px"><canvas id="cMs"></canvas></div></div>
+    </div>
+
+    <div class="grid3">
+      <div><h3>Sistem</h3>
+        <div class="meter"><div class="ml"><span>Cihaz belleği</span><b id="mCihaz">-</b></div><div class="progress"><div id="mCihazP"></div></div></div>
+        <dl class="kv" id="sisKv"></dl></div>
+      <div><h3>Veri sağlığı</h3><dl class="kv" id="veriKv"></dl><ul class="mini-list" id="atlananList"></ul></div>
+      <div><h3>Canlı günlük</h3><div class="tlog" id="tlog"></div></div>
+    </div>
+  </section>
 
   <section class="panel" id="egitim">
     <h2>Eğitim</h2>
@@ -1804,6 +2230,7 @@ function toast(msg) {
 async function api(path, body) {
   const opt = body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
   const r = await fetch(path, opt);
+  if (r.status === 401) { location.href = "/giris?next=/backend"; throw new Error("Giriş gerekli"); }
   const j = await r.json();
   if (!r.ok) throw new Error(j.hata || ("HTTP " + r.status));
   return j;
@@ -1902,7 +2329,7 @@ function renderVeri(s) {
   $("urlBtn").innerHTML = w.calisiyor ? '<span class="spinner"></span>İndiriliyor' : "İndir";
   if (w.calisiyor) $("webDurum").textContent = `${w.kaydedilen}/${w.hedef} sayfa kaydedildi · ${w.son_url}`;
   const html = v.kaynaklar.map(k => `<li><span class="mark" style="color:var(--faint)">•</span><div><div class="name">${esc(k.ad)}</div>
-    <div class="detail">${k.karakter.toLocaleString("tr-TR")} karakter</div></div></li>`).join("");
+    <div class="detail">${k.karakter.toLocaleString("tr-TR")} karakter${k.tekrar ? ` · ${k.tekrar.toLocaleString("tr-TR")} tekrar atıldı` : ""}</div></div></li>`).join("");
   const box = $("kaynakList"), yeni = html || '<li class="empty">Henüz dış veri yok.</li>';
   if (box._last !== yeni) { box.innerHTML = yeni; box._last = yeni; }
 }
@@ -2043,6 +2470,166 @@ function renderQC(q) {
      <div><div class="name">Uyarı</div><div class="detail">${esc(u)}</div></div></li>`));
   $("qcList").innerHTML = items.join("");
 }
+// ================================================================ canlı telemetri (SSE)
+const T = { adimlar: [], evaller: [], ozet: null, aralik: 0, log: false, sonPaket: 0, ciz: false };
+const sayiF = (x, d = 1) => x === null || x === undefined || !isFinite(x) ? "-" : Number(x).toLocaleString("tr-TR", { maximumFractionDigits: d, minimumFractionDigits: d });
+const kisa = (n) => n >= 1e9 ? sayiF(n / 1e9, 2) + " milyar" : n >= 1e6 ? sayiF(n / 1e6, 1) + " milyon" : n >= 1e3 ? sayiF(n / 1e3, 1) + "K" : String(Math.round(n));
+const bayt = (b) => b === undefined || b === null ? "-" : b >= 1073741824 ? sayiF(b / 1073741824, 2) + " GB" : sayiF(b / 1048576, 0) + " MB";
+function sure(sn) {
+  if (sn === undefined || sn === null || !isFinite(sn)) return "-";
+  sn = Math.max(0, Math.round(sn));
+  const sa = Math.floor(sn / 3600), dk = Math.floor(sn % 3600 / 60), s = sn % 60;
+  return sa ? `${sa} sa ${dk} dk` : dk ? `${dk} dk ${s} sn` : `${s} sn`;
+}
+function kpiDurum(id, durum) { const e = $(id); e.classList.remove("kotu", "dikkat", "iyi"); if (durum) e.classList.add(durum); }
+
+function telBagla() {
+  const es = new EventSource("/api/telemetri/akis");
+  const bag = (durum, metin) => { $("telBag").className = "pill " + durum; $("telBagT").textContent = metin; $("telDot").className = "dot" + (durum === "on" ? " live" : ""); };
+  es.addEventListener("tam", (e) => { const p = JSON.parse(e.data); T.adimlar = p.adimlar; T.evaller = p.evaller; $("tlog").textContent = ""; telIsle(p); });
+  es.onmessage = (e) => { const p = JSON.parse(e.data); T.adimlar.push(...p.adimlar); T.evaller.push(...p.evaller);
+    if (T.adimlar.length > 60000) T.adimlar.splice(0, T.adimlar.length - 50000); telIsle(p); };
+  es.onopen = () => bag("on", "Canlı");
+  es.onerror = async () => {
+    bag("off", "Yeniden bağlanıyor");
+    try { const r = await fetch("/api/telemetri"); if (r.status === 401) location.href = "/giris?next=/backend"; } catch (_) {}
+  };
+}
+
+function telIsle(p) {
+  const o = p.ozet; T.ozet = o; T.sonPaket = Date.now();
+  if (p.loglar && p.loglar.length) {
+    const box = $("tlog"), alt = box.scrollTop + box.clientHeight >= box.scrollHeight - 20;
+    box.textContent = (box.textContent ? box.textContent + "\n" : "") + p.loglar.join("\n");
+    if (box.textContent.length > 60000) box.textContent = box.textContent.slice(-40000);
+    if (alt) box.scrollTop = box.scrollHeight;
+  }
+  // KPI'lar
+  const bas = o.kosu && o.kosu.bas_adim || 0, hedef = o.hedef_adim || o.adim;
+  $("tAdim").textContent = o.adim.toLocaleString("tr-TR") + (o.egitimde ? " / " + hedef.toLocaleString("tr-TR") : "");
+  const pct = o.egitimde && hedef > bas ? (o.adim - bas) / (hedef - bas) * 100 : (o.adim ? 100 : 0);
+  $("tProg").style.width = Math.min(100, pct) + "%";
+  $("tAdimS").textContent = o.egitimde ? `%${sayiF(pct, 1)} · bu koşu ${(o.adim - bas).toLocaleString("tr-TR")} adım` : (o.adim ? "eğitim duruyor" : "henüz eğitilmedi");
+  $("tEta").textContent = o.egitimde ? sure(o.eta_sn) : "-";
+  $("tEtaS").textContent = o.egitimde ? `geçen ${sure(o.gecen_sn)} · ${sayiF(o.sn_adim, 2)} sn/adım` : "eğitim çalışmıyor";
+  $("tHiz").textContent = o.token_sn ? kisa(o.token_sn) + " tok/sn" : "-";
+  $("tHizS").textContent = o.adim_ms ? `${sayiF(o.adim_ms, 0)} ms/adım · adımda ${o.adim_token.toLocaleString("tr-TR")} token` : "-";
+  $("tLoss").textContent = o.ema_loss != null ? sayiF(o.ema_loss, 4) : "-";
+  $("tLossS").textContent = o.son_loss != null ? `son adım ${sayiF(o.son_loss, 4)} · lr ${o.lr}` : `lr ${o.lr}`;
+  $("tVal").textContent = o.eval_val != null ? sayiF(o.eval_val, 4) : "-";
+  $("tValS").textContent = o.eval_val != null ? `± ${sayiF(o.val_se, 4)} · en iyi ${sayiF(o.en_iyi_val, 4)} @ ${o.en_iyi_adim}` : "ilk değerlendirme bekleniyor";
+  kpiDurum("tValK", o.eval_beri >= 6 ? "dikkat" : (o.eval_beri === 0 && o.eval_val != null ? "iyi" : ""));
+  $("tFark").textContent = o.fark != null ? (o.fark >= 0 ? "+" : "") + sayiF(o.fark, 4) : "-";
+  $("tFarkS").textContent = o.oran ? `val / train = ${sayiF(o.oran, 2)}` : "-";
+  kpiDurum("tFarkK", o.fark == null ? "" : o.fark > 0.15 ? "kotu" : o.fark > 0.1 ? "dikkat" : "iyi");
+  $("tTur").textContent = sayiF(o.tur, 2) + "×";
+  $("tTurS").textContent = `${kisa(o.gorulen_token)} / ${kisa(o.train_token)} token görüldü`;
+  kpiDurum("tTurK", o.tur >= 20 ? "kotu" : o.tur >= 5 ? "dikkat" : "");
+  $("tGn").textContent = o.grad_norm != null ? sayiF(o.grad_norm, 3) : "-";
+  $("tGnS").textContent = o.kirpma_orani != null ? `ort. ${sayiF(o.grad_norm_ort, 3)} · %${sayiF(o.kirpma_orani * 100, 0)} kırpıldı` : "-";
+  kpiDurum("tGnK", o.kirpma_orani > 0.5 ? "dikkat" : "");
+  // kararlar
+  const ad = { kritik: "kritik", uyari: "uyarı", bilgi: "bilgi", iyi: "iyi" };
+  const html = o.teshis.map(k => `<div class="karar ${k.seviye}"><div class="kb">${esc(k.baslik)}<em>${ad[k.seviye]}</em></div>
+    <div class="kd">${esc(k.detay)}</div>${k.oneri ? `<div class="ko">${esc(k.oneri)}</div>` : ""}</div>`).join("");
+  if ($("kararlar")._son !== html) { $("kararlar").innerHTML = html; $("kararlar")._son = html; }
+  if (!T.edAyarli) { $("edAcik").checked = o.erken_durdur.acik; $("edSabir").value = o.erken_durdur.sabir; T.edAyarli = true; }
+  // sistem
+  const s = o.sistem;
+  const cihazDolu = s.cihaz_surucu || s.cihaz_ayrilan;
+  $("mCihaz").textContent = cihazDolu !== undefined ? bayt(cihazDolu) + (s.cihaz_toplam ? " / " + bayt(s.cihaz_toplam) : "") : "ölçülemiyor";
+  $("mCihazP").style.width = s.cihaz_toplam && cihazDolu ? Math.min(100, cihazDolu / s.cihaz_toplam * 100) + "%" : "0";
+  const kv = (dl, satirlar) => { const h = satirlar.filter(r => r[1] !== undefined && r[1] !== null).map(r => `<dt>${r[0]}</dt><dd>${esc(String(r[1]))}</dd>`).join(""); if ($(dl)._son !== h) { $(dl).innerHTML = h; $(dl)._son = h; } };
+  kv("sisKv", [["Cihaz", o.cihaz.toUpperCase()], ["Tensör belleği", s.cihaz_ayrilan !== undefined ? bayt(s.cihaz_ayrilan) : undefined],
+    ["Süreç belleği", s.surec ? bayt(s.surec) : undefined], ["Süreç tepe", s.surec_tepe ? bayt(s.surec_tepe) : undefined],
+    ["Sistem yükü", s.yuk ? s.yuk.join(" · ") + ` (${s.cpu} çekirdek)` : undefined],
+    ["Son kayıt", o.son_kayit ? `adım ${o.son_kayit.adim} · ${sure(o.zaman - o.son_kayit.zaman)} önce` : "henüz yok"],
+    ["Model", `${(o.parametre / 1e6).toFixed(2)}M · ${o.config.n_embd}×${o.config.n_layer} · blok ${o.config.block_size}`],
+    ["Batch · dropout", `${o.config.batch_size} · ${o.config.dropout}`]]);
+  const sz = o.sizinti;
+  kv("veriKv", [["Eğitim", kisa(o.train_token) + " token"], ["Doğrulama", kisa(o.val_token) + " token"],
+    ["Val sızıntısı", sz.durum === "tamam" ? `%${sayiF(sz.oran * 100, 1)} (${sz.ornek} pencere)` : sz.durum === "hata" ? "ölçülemedi" : "ölçülüyor…"],
+    ["Dışarıda kalan", o.atlanan.dosya ? `${o.atlanan.dosya} dosya · ${bayt(o.atlanan.bayt)}` : "yok"],
+    ["Eval", `${o.config.eval_iters} batch, ${o.config.eval_interval} adımda bir`]]);
+  const al = o.atlanan.liste.map(a => `<li>${esc(a.ad)}</li>`).join("");
+  if ($("atlananList")._son !== al) { $("atlananList").innerHTML = al; $("atlananList")._son = al; }
+  T.ciz = true;
+}
+
+// Genel çizgi grafiği: seriler [{pts:[[x,y]], renk, w, nokta, band:[[x,alt,ust]], kesik}], yRef: yatay referans çizgisi
+function grafik(id, seriler, sec = {}) {
+  const cv = $(id), dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+  if (!W || !H) return;
+  if (cv.width !== W * dpr || cv.height !== H * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
+  const ctx = cv.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+  const css = getComputedStyle(document.documentElement), renk = n => n.startsWith("--") ? css.getPropertyValue(n).trim() : n;
+  ctx.font = "11px system-ui, sans-serif"; ctx.fillStyle = renk("--faint");
+  const tum = seriler.flatMap(s => s.pts.concat((s.band || []).flatMap(b => [[b[0], b[1]], [b[0], b[2]]])));
+  if (!tum.length) { ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(sec.bos || "Veri bekleniyor", W / 2, H / 2); return; }
+  const ly = !!sec.log, tf = v => ly ? Math.log10(Math.max(v, 1e-4)) : v;
+  const pad = { l: 50, r: 12, t: 10, b: 22 };
+  let x0 = Math.min(...tum.map(p => p[0])), x1 = Math.max(...tum.map(p => p[0])); if (x1 === x0) x1 = x0 + 1;
+  let ys = tum.map(p => tf(p[1])); if (sec.yRef !== undefined) ys.push(tf(sec.yRef));
+  let y0 = Math.min(...ys), y1 = Math.max(...ys), m = (y1 - y0) * 0.06 || 0.5; y0 -= m; y1 += m;
+  if (!ly && sec.sifir && y0 < 0 && Math.min(...tum.map(p => p[1])) >= 0) y0 = 0;
+  const X = v => pad.l + (v - x0) / (x1 - x0) * (W - pad.l - pad.r), Y = v => pad.t + (1 - (tf(v) - y0) / (y1 - y0)) * (H - pad.t - pad.b);
+  ctx.strokeStyle = renk("--chart-grid"); ctx.lineWidth = 1; ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  for (let i = 0; i <= 4; i++) {
+    const t = y0 + (y1 - y0) * i / 4, y = pad.t + (1 - i / 4) * (H - pad.t - pad.b), v = ly ? Math.pow(10, t) : t;
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
+    ctx.fillText(Math.abs(v) >= 100 ? Math.round(v) : v.toFixed(Math.abs(v) < 1 ? 3 : 2), pad.l - 6, y);
+  }
+  ctx.textAlign = "center"; ctx.textBaseline = "top";
+  for (let i = 0; i <= 4; i++) { const v = x0 + (x1 - x0) * i / 4; ctx.fillText(Math.round(v), X(v), H - pad.b + 6); }
+  if (sec.yRef !== undefined) { ctx.strokeStyle = renk("--err"); ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(pad.l, Y(sec.yRef)); ctx.lineTo(W - pad.r, Y(sec.yRef)); ctx.stroke(); ctx.setLineDash([]); }
+  for (const s of seriler) {
+    if (s.band && s.band.length) {
+      ctx.fillStyle = renk(s.renk); ctx.globalAlpha = 0.16; ctx.beginPath();
+      s.band.forEach((b, i) => i ? ctx.lineTo(X(b[0]), Y(b[2])) : ctx.moveTo(X(b[0]), Y(b[2])));
+      for (let i = s.band.length - 1; i >= 0; i--) ctx.lineTo(X(s.band[i][0]), Y(s.band[i][1]));
+      ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1;
+    }
+    if (!s.pts.length) continue;
+    ctx.strokeStyle = renk(s.renk); ctx.lineWidth = s.w || 1.5; ctx.lineJoin = "round"; ctx.beginPath();
+    s.pts.forEach((p, i) => i ? ctx.lineTo(X(p[0]), Y(p[1])) : ctx.moveTo(X(p[0]), Y(p[1]))); ctx.stroke();
+    if (s.nokta) { ctx.fillStyle = renk(s.renk); s.pts.forEach(p => { ctx.beginPath(); ctx.arc(X(p[0]), Y(p[1]), 2.6, 0, 7); ctx.fill(); }); }
+  }
+}
+function seyrelt(a, n = 1600) { if (a.length <= n) return a; const k = Math.ceil(a.length / n), o = []; for (let i = 0; i < a.length; i += k) o.push(a[i]); if (o[o.length - 1] !== a[a.length - 1]) o.push(a[a.length - 1]); return o; }
+
+function telCiz() {
+  let ad = T.adimlar, ev = T.evaller;
+  if (T.aralik && ad.length) { const sinir = ad[ad.length - 1][0] - T.aralik; ad = ad.filter(p => p[0] > sinir); ev = ev.filter(e => e[0] > sinir); }
+  const ema = []; let e = null;
+  for (const p of ad) { if (!isFinite(p[1])) continue; e = e === null ? p[1] : 0.98 * e + 0.02 * p[1]; ema.push([p[0], e]); }
+  grafik("cLoss", [
+    { pts: seyrelt(ad.filter(p => isFinite(p[1])).map(p => [p[0], p[1]])), renk: "--chart-grid", w: 1 },
+    { pts: seyrelt(ema), renk: "--chart-train", w: 2 },
+    { pts: ev.map(x => [x[0], x[1]]), renk: "--chart-3", w: 1.5, nokta: true },
+    { pts: ev.map(x => [x[0], x[2]]), renk: "--chart-val", w: 2, nokta: true, band: ev.map(x => [x[0], x[2] - x[4], x[2] + x[4]]) },
+  ], { log: T.log, bos: "Eğitim başladığında kayıp eğrileri burada akacak" });
+  grafik("cFark", [{ pts: ev.map(x => [x[0], x[2] - x[1]]), renk: "--chart-val", w: 2, nokta: true }], { yRef: 0, bos: "İlk değerlendirme bekleniyor" });
+  grafik("cGn", [{ pts: seyrelt(ad.map(p => [p[0], p[3]])), renk: "--chart-3", w: 1.2 }], { yRef: 1.0, sifir: true });
+  grafik("cMs", [{ pts: seyrelt(ad.map(p => [p[0], p[2]])), renk: "--chart-train", w: 1.2 }], { sifir: true });
+}
+setInterval(() => {
+  if (T.ciz) { T.ciz = false; telCiz(); }
+  if (T.sonPaket) {
+    const yas = (Date.now() - T.sonPaket) / 1000;
+    if (yas > 6 && $("telBag").classList.contains("on")) { $("telBag").className = "pill"; $("telBagT").textContent = `${Math.round(yas)} sn önce`; }
+  }
+}, 400);
+window.addEventListener("resize", () => { T.ciz = true; });
+document.querySelectorAll("#tAralik button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("#tAralik button").forEach(x => x.classList.toggle("on", x === b)); T.aralik = Number(b.dataset.n); T.ciz = true; });
+document.querySelectorAll("#tOlcek button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("#tOlcek button").forEach(x => x.classList.toggle("on", x === b)); T.log = b.dataset.l === "1"; T.ciz = true; });
+$("edKaydet").onclick = async () => {
+  try { const r = await api("/api/telemetri/ayar", { erken_durdur: $("edAcik").checked, sabir: Number($("edSabir").value) });
+    toast(r.erken_durdur.acik ? `Erken durdurma açık (sabır ${r.erken_durdur.sabir})` : "Erken durdurma kapalı"); } catch (e) { toast("Hata: " + e.message); }
+};
+$("cikisBtn").onclick = async (e) => { e.preventDefault(); try { await api("/api/cikis", {}); } catch (_) {} location.href = "/giris"; };
+telBagla();
 </script>
 </body>
 </html>
@@ -2442,7 +3029,7 @@ async function durumYenile() {
   try {
     const s = await api("/api/status");
     const p = s.parametre >= 1e6 ? (s.parametre / 1e6).toFixed(1) + "M" : Math.round(s.parametre / 1e3) + "K";
-    if (s.uzak) $("panelLink").style.display = "none";
+    if (s.uzak && !s.oturum) $("panelLink").style.display = "none";
     $("dot").classList.toggle("busy", !!s.egitimde);
     $("modelText").textContent = s.egitimde ? "Eğitiliyor · adım " + s.adim : "Elalem " + p + " · " + s.cihaz;
   } catch (e) {
@@ -2460,7 +3047,138 @@ durumYenile(); setInterval(durumYenile, 5000);
 # 8. 127.0.0.1 WEB SUNUCUSU (http.server)
 # =============================================================================
 
-def handler_olustur(motor):
+# Panel şifresi. Öncelik: --sifre, ELALEM_SIFRE ortam değişkeni, elalem_sifre.txt; hiçbiri yoksa
+# rastgele bir şifre üretilip elalem_sifre.txt dosyasına yazılır (her açılışta aynı kalsın diye).
+SIFRE_DOSYASI = os.path.join(SCRIPT_DIR, "elalem_sifre.txt")
+OTURUM_SURESI = 12 * 3600              # giriş 12 saat geçerli
+COOKIE_ADI = "elalem_oturum"
+
+
+def sifre_belirle(arg=None):
+    if arg:
+        return arg, "--sifre"
+    if os.environ.get("ELALEM_SIFRE"):
+        return os.environ["ELALEM_SIFRE"], "ELALEM_SIFRE"
+    try:
+        with open(SIFRE_DOSYASI, encoding="utf-8") as f:
+            kayitli = f.read().strip()
+        if kayitli:
+            return kayitli, os.path.basename(SIFRE_DOSYASI)
+    except OSError:
+        pass
+    yeni = secrets.token_urlsafe(12)
+    try:
+        fd = os.open(SIFRE_DOSYASI, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(yeni + "\n")
+    except OSError:
+        pass
+    return yeni, os.path.basename(SIFRE_DOSYASI) + " (yeni üretildi)"
+
+
+class Kimlik:
+    """Şifreli giriş: başarılı girişte rastgele oturum anahtarı (HttpOnly çerez) verilir.
+    Aynı adresten 10 dakikada 5 hatalı denemeden sonra o adres 10 dakika kilitlenir."""
+
+    def __init__(self, sifre):
+        self._sifre = sifre.encode("utf-8")
+        self._oturumlar = {}             # anahtar -> bitiş zamanı
+        self._hatalar = {}               # ip -> [hata zamanları]
+        self._kilit = threading.Lock()
+
+    def sifre_dogru(self, sifre):
+        return hmac.compare_digest(str(sifre).encode("utf-8"), self._sifre)
+
+    def oturum_ac(self):
+        anahtar = secrets.token_urlsafe(32)
+        with self._kilit:
+            simdi = time.time()
+            self._oturumlar = {k: v for k, v in self._oturumlar.items() if v > simdi}
+            self._oturumlar[anahtar] = simdi + OTURUM_SURESI
+        return anahtar
+
+    def gecerli(self, anahtar):
+        if not anahtar:
+            return False
+        with self._kilit:
+            bitis = self._oturumlar.get(anahtar)
+            return bool(bitis and bitis > time.time())
+
+    def kapat(self, anahtar):
+        with self._kilit:
+            self._oturumlar.pop(anahtar, None)
+
+    def kilitli_sure(self, ip):
+        with self._kilit:
+            simdi = time.time()
+            h = [t for t in self._hatalar.get(ip, []) if simdi - t < 600]
+            self._hatalar[ip] = h
+            return int(600 - (simdi - h[0])) if len(h) >= 5 else 0
+
+    def hata_kaydet(self, ip):
+        with self._kilit:
+            self._hatalar.setdefault(ip, []).append(time.time())
+
+
+GIRIS_HTML = r"""<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Elalem · Giriş</title>
+<style>
+  :root { --bg: #faf9f6; --surface: #fff; --border: #e6e2d9; --text: #1f1e1c; --muted: #6f6b62; --accent: #1f6f63;
+    --accent-hover: #175a50; --accent-soft: #e1efec; --err: #b4372f; --err-bg: #f9e4e1; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #1c1b19; --surface: #252421; --border: #393631; --text: #ece9e2;
+    --muted: #a8a397; --accent: #3fa391; --accent-hover: #52b5a3; --accent-soft: #1e332f; --err: #ef8a80; --err-bg: #3d2420; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 16px; background: var(--bg); color: var(--text);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  form { width: 100%; max-width: 360px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 28px; }
+  .logo { width: 40px; height: 40px; color: var(--accent); margin-bottom: 14px; }
+  h1 { font: 400 24px "Iowan Old Style", Palatino, Georgia, serif; margin: 0 0 4px; }
+  p { margin: 0 0 20px; color: var(--muted); }
+  label { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 6px; }
+  input { width: 100%; font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; outline: none; }
+  input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  button { width: 100%; margin-top: 14px; font: inherit; font-weight: 600; color: #fff; background: var(--accent); border: 0; border-radius: 10px; padding: 10px; cursor: pointer; }
+  button:hover { background: var(--accent-hover); } button:disabled { opacity: .5; }
+  .hata { display: none; margin-top: 12px; padding: 8px 10px; border-radius: 9px; background: var(--err-bg); color: var(--err); font-size: 13px; }
+  .alt { margin-top: 18px; font-size: 12.5px; color: var(--muted); }
+  .alt a { color: var(--accent); }
+</style>
+</head>
+<body>
+<form id="f">
+  <svg class="logo" viewBox="0 0 32 32"><rect x="1" y="1" width="30" height="30" rx="9" fill="currentColor"/><path d="M10 11l-4 5 4 5M22 11l4 5-4 5M18 9l-4 14" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  <h1>Model paneli</h1>
+  <p>Devam etmek için panel şifresini gir.</p>
+  <label for="s">Şifre</label>
+  <input id="s" type="password" autocomplete="current-password" autofocus required>
+  <button id="b">Giriş yap</button>
+  <div class="hata" id="h"></div>
+  <div class="alt">Şifre, Elalem'i başlattığın terminalde ve <code>elalem_sifre.txt</code> dosyasında yazar. <a href="/">Stüdyoya dön</a></div>
+</form>
+<script>
+const f = document.getElementById("f"), h = document.getElementById("h"), b = document.getElementById("b");
+f.onsubmit = async (e) => {
+  e.preventDefault(); b.disabled = true; h.style.display = "none";
+  try {
+    const r = await fetch("/api/giris", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sifre: document.getElementById("s").value }) });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.hata || "Giriş başarısız");
+    const n = new URLSearchParams(location.search).get("next") || "/backend";
+    location.href = (n.startsWith("/") && !n.startsWith("//")) ? n : "/backend";
+  } catch (err) { h.textContent = err.message; h.style.display = "block"; b.disabled = false; }
+};
+</script>
+</body>
+</html>
+"""
+
+
+def handler_olustur(motor, kimlik):
     class ElalemHandler(BaseHTTPRequestHandler):
         server_version = "ElalemHTTP/1.0"
 
@@ -2486,10 +3204,11 @@ def handler_olustur(motor):
             ham = self.rfile.read(n) if n else b"{}"
             return json.loads(ham.decode("utf-8") or "{}")
 
-        # Tünel (cloudflared, ngrok vb.) üzerinden gelen ziyaretçi yalnızca stüdyoyu kullanabilir;
-        # panel, eğitim ve veri uçları sadece bu bilgisayardan (localhost) açılır.
-        UZAK_SERBEST = {("GET", "/"), ("GET", "/index.html"), ("GET", "/favicon.ico"), ("GET", "/api/status"),
-                        ("POST", "/api/generate"), ("POST", "/api/qc")}
+        # Herkese açık uçlar: stüdyo ve giriş. Geri kalan her şey (panel, eğitim, veri, telemetri) şifre ister;
+        # bu kural hem bu bilgisayardan hem de tünel (cloudflared, ngrok) üzerinden gelen istekler için geçerlidir.
+        ACIK = {("GET", "/"), ("GET", "/index.html"), ("GET", "/favicon.ico"), ("GET", "/giris"),
+                ("GET", "/api/status"), ("POST", "/api/generate"), ("POST", "/api/qc"),
+                ("POST", "/api/giris"), ("POST", "/api/cikis")}
 
         def _uzaktan(self):
             if any(self.headers.get(h) for h in ("Cf-Connecting-Ip", "X-Forwarded-For", "Forwarded", "X-Real-Ip")):
@@ -2499,26 +3218,91 @@ def handler_olustur(motor):
             sunucu = (self.headers.get("Host") or "").rsplit(":", 1)[0].strip("[]").lower()
             return sunucu not in ("127.0.0.1", "localhost", "::1", "")
 
+        def _ip(self):
+            return (self.headers.get("Cf-Connecting-Ip") or self.client_address[0]).strip()
+
+        def _https(self):
+            return (self.headers.get("X-Forwarded-Proto", "").lower() == "https"
+                    or "https" in self.headers.get("Cf-Visitor", ""))
+
+        def _cerez(self):
+            for parca in (self.headers.get("Cookie") or "").split(";"):
+                ad, _, deger = parca.strip().partition("=")
+                if ad == COOKIE_ADI:
+                    return deger
+            return ""
+
+        def _oturumlu(self):
+            return kimlik.gecerli(self._cerez())
+
         def _izinli(self, yontem, yol):
-            if not self._uzaktan() or (yontem, yol) in self.UZAK_SERBEST:
+            if (yontem, yol) in self.ACIK or self._oturumlu():
                 return True
-            self._json(403, {"hata": "Bu sayfa yalnızca Elalem'in çalıştığı bilgisayardan açılabilir."})
+            if yontem == "GET" and not yol.startswith("/api/"):
+                self.send_response(302)
+                self.send_header("Location", "/giris?next=" + urllib.parse.quote(yol))
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+            else:
+                self._json(401, {"hata": "Giriş gerekli", "giris": "/giris"})
             return False
+
+        def _akis(self):
+            """Server-Sent Events: önce tam geçmiş, sonra her 0,5 sn'de (boşta 2 sn) yalnızca yeni ölçümler."""
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Accel-Buffering", "no")       # ara sunucular akışı tamponlamasın
+            self.end_headers()
+            anahtar = self._cerez()
+            paket = motor.telemetri()
+            o = paket["ozet"]
+            adim_imlec, log_imlec = o["adim"], o["log_sayaci"]
+            eval_imlec = paket["evaller"][-1][0] if paket["evaller"] else -1
+            bitis = time.time() + 3600                        # tarayıcı bir saatte bir yeniden bağlanır
+            try:
+                self.wfile.write(("event: tam\ndata: " + json.dumps(paket, ensure_ascii=False) + "\n\n").encode("utf-8"))
+                self.wfile.flush()
+                while time.time() < bitis and kimlik.gecerli(anahtar):
+                    time.sleep(0.5 if motor.egitimde else 2.0)
+                    paket = motor.telemetri(adim_sonra=adim_imlec, log_sonra=log_imlec, eval_sonra=eval_imlec)
+                    o = paket["ozet"]
+                    adim_imlec = max(adim_imlec, paket["adimlar"][-1][0] if paket["adimlar"] else adim_imlec)
+                    log_imlec = o["log_sayaci"]
+                    if paket["evaller"]:
+                        eval_imlec = paket["evaller"][-1][0]
+                    self.wfile.write(("data: " + json.dumps(paket, ensure_ascii=False) + "\n\n").encode("utf-8"))
+                    self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, OSError):
+                pass
 
         def do_GET(self):
             yol = self.path.split("?", 1)[0]
             if not self._izinli("GET", yol):
                 return
-            if yol == "/api/status" and self._uzaktan():
-                d = motor.durum()
-                self._json(200, dict({k: d[k] for k in ("cihaz", "parametre", "egitimde", "adim")}, uzak=True))
-                return
             if yol in ("/", "/index.html"):
                 self._gonder(200, STUDIO_HTML, "text/html; charset=utf-8")
+            elif yol == "/giris":
+                if self._oturumlu():
+                    self.send_response(302)
+                    self.send_header("Location", "/backend")
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                else:
+                    self._gonder(200, GIRIS_HTML, "text/html; charset=utf-8")
             elif yol in ("/backend", "/backend/"):
                 self._gonder(200, DASHBOARD_HTML, "text/html; charset=utf-8")
             elif yol == "/api/status":
-                self._json(200, motor.durum())
+                d = motor.durum()
+                if self._oturumlu():
+                    self._json(200, dict(d, oturum=True, uzak=self._uzaktan()))
+                else:               # girişsiz: stüdyonun ihtiyacı kadar
+                    self._json(200, dict({k: d[k] for k in ("cihaz", "parametre", "egitimde", "adim")},
+                                         oturum=False, uzak=self._uzaktan()))
+            elif yol == "/api/telemetri":
+                self._json(200, motor.telemetri())
+            elif yol == "/api/telemetri/akis":
+                self._akis()
             elif yol == "/favicon.ico":
                 self._gonder(204, b"", "image/x-icon")
             else:
@@ -2528,13 +3312,51 @@ def handler_olustur(motor):
             yol = self.path.split("?", 1)[0]
             if not self._izinli("POST", yol):
                 return
+            # Yalnızca JSON kabul edilir: başka bir sitenin formu bu uçlara istek gönderemesin (CSRF)
+            if "application/json" not in (self.headers.get("Content-Type") or ""):
+                self._json(415, {"hata": "İstek JSON olmalı"})
+                return
             try:
                 veri = self._govde_oku()
             except Exception as e:
                 self._json(400, {"hata": f"Geçersiz JSON: {e}"})
                 return
             try:
-                if yol == "/api/train":
+                if yol == "/api/giris":
+                    ip = self._ip()
+                    kalan = kimlik.kilitli_sure(ip)
+                    if kalan:
+                        self._json(429, {"hata": f"Çok fazla hatalı deneme. {kalan // 60 + 1} dakika sonra tekrar dene."})
+                    elif kimlik.sifre_dogru(veri.get("sifre", "")):
+                        anahtar = kimlik.oturum_ac()
+                        govde = json.dumps({"ok": True}).encode("utf-8")
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/json; charset=utf-8")
+                        self.send_header("Content-Length", str(len(govde)))
+                        self.send_header("Cache-Control", "no-store")
+                        self.send_header("Set-Cookie", f"{COOKIE_ADI}={anahtar}; Path=/; HttpOnly; SameSite=Lax; "
+                                         f"Max-Age={OTURUM_SURESI}" + ("; Secure" if self._https() else ""))
+                        self.end_headers()
+                        self.wfile.write(govde)
+                        motor.log(f"Panele giriş yapıldı ({'uzaktan' if self._uzaktan() else 'bu bilgisayardan'}).")
+                    else:
+                        kimlik.hata_kaydet(ip)
+                        time.sleep(1.0)                 # kaba kuvvet denemelerini yavaşlat
+                        motor.log(f"Hatalı panel şifresi denemesi ({ip}).")
+                        self._json(401, {"hata": "Şifre yanlış."})
+                elif yol == "/api/cikis":
+                    kimlik.kapat(self._cerez())
+                    govde = b'{"ok": true}'
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.send_header("Content-Length", str(len(govde)))
+                    self.send_header("Set-Cookie", f"{COOKIE_ADI}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0")
+                    self.end_headers()
+                    self.wfile.write(govde)
+                elif yol == "/api/telemetri/ayar":
+                    ed = motor.erken_durdurma_ayarla(bool(veri.get("erken_durdur")), int(veri.get("sabir", 6)))
+                    self._json(200, {"ok": True, "erken_durdur": ed})
+                elif yol == "/api/train":
                     adim = int(veri.get("steps", 1500))
                     lr = float(veri.get("lr", motor.cfg["learning_rate"]))
                     if not (1 <= adim <= 100_000):
@@ -2583,12 +3405,17 @@ def handler_olustur(motor):
     return ElalemHandler
 
 
-def sunucuyu_baslat(motor, host="127.0.0.1", port=8080, tarayici_ac=False):
-    httpd = ThreadingHTTPServer((host, port), handler_olustur(motor))
+def sunucuyu_baslat(motor, host="127.0.0.1", port=8080, tarayici_ac=False, sifre=None):
+    sifre, kaynak = sifre_belirle(sifre)
+    httpd = ThreadingHTTPServer((host, port), handler_olustur(motor, Kimlik(sifre)))
     httpd.daemon_threads = True
     url = f"http://{host}:{port}"
     print("=" * 64)
-    print(f"  ELALEM LLM kontrol paneli hazır:  {url}")
+    print(f"  ELALEM stüdyo:        {url}/")
+    print(f"  Model paneli:         {url}/backend")
+    print(f"  Panel şifresi:        {sifre}   (kaynak: {kaynak})")
+    if len(sifre) < 10:
+        print("  UYARI: şifre kısa. Tünelle paylaşacaksan en az 10 karakterlik bir şifre kullan.")
     print(f"  Cihaz: {DEVICE} | Durdurmak için Ctrl+C")
     print("=" * 64, flush=True)
     if tarayici_ac:
@@ -2647,6 +3474,7 @@ def self_test(motor, adim=30):
 
 
 def main():
+    global MAX_DIS_VERI
     ap = argparse.ArgumentParser(description="Elalem - sıfırdan PyTorch LLM + localhost kontrol paneli")
     ap.add_argument("--host", default="127.0.0.1", help="Sunucu adresi (varsayılan 127.0.0.1)")
     ap.add_argument("--port", type=int, default=8080, help="Sunucu portu (varsayılan 8080)")
@@ -2662,8 +3490,12 @@ def main():
     ap.add_argument("--batch-size", type=int, help="Batch boyutu")
     ap.add_argument("--lr", type=float, help="Varsayılan öğrenme oranı")
     ap.add_argument("--dropout", type=float, help="Dropout oranı, 0-0.5 (varsayılan 0.1)")
+    ap.add_argument("--max-veri", type=float, default=MAX_DIS_VERI / 1e6,
+                    help=f"veri/ klasöründen en fazla kaç milyon karakter okunsun (varsayılan {MAX_DIS_VERI / 1e6:.0f})")
+    ap.add_argument("--sifre", help="Panel şifresi (yoksa ELALEM_SIFRE ya da elalem_sifre.txt; o da yoksa rastgele üretilir)")
     args = ap.parse_args()
 
+    MAX_DIS_VERI = int(max(0.1, args.max_veri) * 1e6)
     cfg = dict(CONFIG, **BOYUTLAR[args.boyut])
     for anahtar, deger in (("n_embd", args.n_embd), ("n_layer", args.n_layer), ("n_head", args.n_head),
                            ("block_size", args.block_size), ("batch_size", args.batch_size),
@@ -2683,7 +3515,7 @@ def main():
     motor = ElalemMotoru(cfg, FULLSTACK_DATA)
     if args.selftest:
         sys.exit(0 if self_test(motor, args.selftest_steps) else 1)
-    sunucuyu_baslat(motor, args.host, args.port, args.open)
+    sunucuyu_baslat(motor, args.host, args.port, args.open, args.sifre)
 
 
 if __name__ == "__main__":
