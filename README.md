@@ -193,7 +193,9 @@ Kendi örneklerini aynı biçimde yazarsan modele "şu isteğe şu cevabı ver" 
 - `main.py`'nin yanındaki `veri/` klasörü ve alt klasörleri taranır.
 - Okunan uzantılar: `.html .htm .css .scss .js .jsx .ts .tsx .vue .py .txt .md .json`.
 - Atlanan klasörler: `node_modules`, `__pycache__`, `venv`, `.venv`, `dist`, `build`, `.git` ve `.` ile başlayanlar. Adında `contributors` geçen dosyalar da atlanır.
-- Toplam sınır: 30 milyon karakter.
+- Toplam sınır: 100 milyon karakter (`--max-veri` ile değişir). Dosyalar alfabetik sırayla okunur; sınır dolunca kalan dosyalar terminalde ve panelin **Veri sağlığı** kutusunda listelenir, sessizce kaybolmaz.
+- **Tekilleştirme:** Sohbet biçimli dosyalarda (`<|son|>` içerenler) aynı istek + cevap bloğu, dosyalar arasında da olsa yalnızca bir kez alınır. Tekrarlar hem eğitim süresini boşa harcar hem de val'e düşüp doğrulama kaybını ezbere çevirir.
+- Veri bellekte `uint8` tutulur (sözlük 256'dan küçük), 100M karakter yaklaşık 100 MB yer kaplar.
 - **Dengeleme:** Dış veri büyüdükçe gömülü veri tekrarlanır (en fazla 50 kez), böylece sohbet biçimi eğitimin yaklaşık %20'sini oluşturur ve unutulmaz.
 - Yeni dosya ekledikten sonra panelde **↻ Veriyi Yenile**'ye bas. Eğitim sürerken veri yenilenemez.
 
@@ -292,7 +294,21 @@ Skor = geçen kontrol oranı × 100, her uyarı için −3 (en fazla −15).
 
 ## Kontrol paneli
 
-`http://127.0.0.1:8080/backend`. Solda bölümler arası gezinme (Eğitim, Veri, Playground, Kalite kontrolü), üstte parametre, sözlük, veri ve doğrulama loss kartları. Açık ve koyu temayı işletim sistemine göre seçer, telefonda da çalışır, internet bağlantısı gerektirmez.
+`http://127.0.0.1:8080/backend` (şifreli). Solda bölümler arası gezinme (Canlı telemetri, Eğitim, Veri, Playground, Kalite kontrolü), üstte parametre, sözlük, veri ve doğrulama loss kartları. Açık ve koyu temayı işletim sistemine göre seçer, telefonda da çalışır, internet bağlantısı gerektirmez.
+
+### Şifre
+
+Panel ve stüdyo dışındaki tüm uçlar şifre ister, bu bilgisayardan açarken de. Şifre şu sırayla belirlenir: `--sifre`, `ELALEM_SIFRE` ortam değişkeni, `main.py`'nin yanındaki `elalem_sifre.txt`. Hiçbiri yoksa ilk açılışta rastgele bir şifre üretilip bu dosyaya yazılır; şifre her açılışta terminalde de yazar. Giriş 12 saat geçerlidir (HttpOnly çerez). Aynı adresten 10 dakikada 5 hatalı denemeden sonra o adres 10 dakika kilitlenir. Sol alttaki **Çıkış yap** oturumu kapatır.
+
+### Canlı telemetri
+
+Her eğitim adımının ölçümü sunucudan tarayıcıya anlık akar (Server-Sent Events, `/api/telemetri/akis`); sayfa açıldığında tüm geçmiş, sonra yarım saniyede bir yalnızca yeni ölçümler gelir.
+
+- **Göstergeler:** adım ve ilerleme, kalan süre (değerlendirmeler dahil gerçek hızdan), token/sn ve ms/adım, ortalama (EMA) eğitim loss'u, doğrulama loss'u ± standart hata ve en iyi değeri, genelleme farkı (val − train), veri turu (eğitim verisinin kaç kez görüldüğü), kırpma öncesi gradyan normu ve kırpılan adım oranı.
+- **Grafikler:** kayıp (adım loss'u, EMA, eval train, eval val ve hata bandı; tümü / son 1000 / son 200 adım, doğrusal / log ölçek), genelleme farkı, gradyan normu (1.0 kırpma sınırıyla), adım süresi.
+- **Sistem ve veri sağlığı:** cihaz belleği (CUDA / MPS), süreç belleği, sistem yükü, son kayıt; eğitim ve doğrulama token sayısı, **val sızıntısı** (val'den alınan 128 karakterlik pencerelerin eğitim verisinde birebir geçme oranı) ve sınır yüzünden dışarıda kalan dosyalar.
+- **Kararlar:** ölçümlerden otomatik çıkarılan teşhisler ve ne yapılacağı: NaN loss (eğitim kendiliğinden durur), dışarıda kalan veri, val sızıntısı, aşırı öğrenme, ilerlemeyen val, veri turu (ezber riski), sık gradyan kırpma, loss sıçraması, takılan eğitim, yavaşlayan adımlar, gürültülü val ölçümü.
+- **Erken durdurma:** açılırsa val belirtilen sayıda değerlendirme boyunca iyileşmediğinde eğitim durur ve model kaydedilir. Standart hatanın yarısından küçük düşüşler iyileşme sayılmaz.
 
 ## Arkadaşına göstermek (cloudflared)
 
@@ -302,7 +318,7 @@ Sunucu yalnızca `127.0.0.1`'e bağlanır. Dışarıya açmak için ayrı bir te
 cloudflared tunnel --url http://127.0.0.1:8080
 ```
 
-Çıktıdaki `https://....trycloudflare.com` adresini paylaşın. Tünelden gelen ziyaretçi **yalnızca stüdyoyu** kullanabilir: `/`, `/api/generate`, `/api/qc` ve kısaltılmış `/api/status`. Panel, eğitim, veri ekleme ve web çekimi uçları 403 döner; bunlar sadece Elalem'in çalıştığı bilgisayardan açılır. Tünel isteği `Cf-Connecting-Ip` / `X-Forwarded-For` başlığı ya da `127.0.0.1` / `localhost` dışındaki `Host` başlığıyla tanınır. Tüneli kapatmak için o terminalde Ctrl+C.
+Çıktıdaki `https://....trycloudflare.com` adresini paylaşın. Şifresiz ziyaretçi **yalnızca stüdyoyu** kullanabilir: `/`, `/api/generate`, `/api/qc` ve kısaltılmış `/api/status`. Panel `/giris` sayfasına yönlenir, diğer uçlar 401 döner. Şifreyi bilen kişi (sen) aynı adresin sonuna `/backend` ekleyip giriş yaparak paneli ve canlı telemetriyi telefondan bile izleyebilir. Tünelle paylaşacaksan en az 10 karakterlik bir şifre kullan (rastgele üretilen 16 karakterdir). Tüneli kapatmak için o terminalde Ctrl+C.
 
 | Bölüm | İçerik |
 |---|---|
@@ -317,13 +333,19 @@ cloudflared tunnel --url http://127.0.0.1:8080
 
 ## HTTP API
 
-Tüm cevaplar JSON'dur. Sunucu sadece `127.0.0.1`'e bağlanır.
+Tüm cevaplar JSON'dur. Sunucu sadece `127.0.0.1`'e bağlanır. `/`, `/giris`, `/api/status`, `/api/generate`, `/api/qc`, `/api/giris` ve `/api/cikis` dışındaki uçlar giriş ister. POST istekleri `Content-Type: application/json` olmalıdır (başka sitelerin form göndermesine karşı).
 
 | Yöntem | Yol | Gövde | Açıklama |
 |---|---|---|---|
 | GET | `/` | — | Stüdyo (kod üretim ekranı) |
-| GET | `/backend` | — | Kontrol paneli (eğitim, veri, QA/QC) |
-| GET | `/api/status` | — | Eğitim durumu, loss geçmişi, loglar, veri kaynakları, web indirme durumu |
+| GET | `/backend` | — | Kontrol paneli (şifreli) |
+| GET | `/giris` | — | Giriş sayfası |
+| POST | `/api/giris` | `{"sifre": "..."}` | Oturum çerezi verir |
+| POST | `/api/cikis` | `{}` | Oturumu kapatır |
+| GET | `/api/status` | — | Girişliyken: eğitim durumu, loss geçmişi, loglar, veri kaynakları; girişsiz: yalnızca cihaz, parametre, eğitim durumu |
+| GET | `/api/telemetri` | — | Telemetri anlık görüntüsü (özet, adım ve eval geçmişi, kararlar) |
+| GET | `/api/telemetri/akis` | — | Aynı veri, Server-Sent Events akışı |
+| POST | `/api/telemetri/ayar` | `{"erken_durdur": true, "sabir": 6}` | Erken durdurmayı açar/kapatır |
 | POST | `/api/train` | `{"steps": 1500, "lr": 0.003}` | Eğitimi başlatır (1-100.000 adım) |
 | POST | `/api/stop` | `{}` | Eğitimi durdurur |
 | POST | `/api/generate` | `{"prompt": "...", "max_new_tokens": 400, "temperature": 0.6, "top_k": 10}` | Üretim + QA/QC raporu |
@@ -350,6 +372,8 @@ Tüm cevaplar JSON'dur. Sunucu sadece `127.0.0.1`'e bağlanır.
 | `--batch-size` | boyuta göre | Batch boyutu |
 | `--lr` | boyuta göre | Varsayılan öğrenme oranı (panele de yansır) |
 | `--dropout` | 0.1 | Dropout oranı; veri azken büyük modelde 0.2-0.3 ezberlemeyi frenler |
+| `--max-veri` | `100` | `veri/` klasöründen en fazla kaç milyon karakter okunsun |
+| `--sifre` | dosyadan | Panel şifresi (yoksa `ELALEM_SIFRE`, `elalem_sifre.txt` ya da rastgele) |
 | `--selftest` | kapalı | Tokenizer, batch şekilleri, model çıktısı, eğitim, üretim ve 6 QC vakasını test edip çıkar (çıkış kodu 0/1) |
 | `--selftest-steps` | `30` | Self-test sırasında eğitim adımı |
 
@@ -367,6 +391,7 @@ elalem/
 ├── veri/
 │   ├── elle/                # elle eklenen / hazır örnek veriler (git'te)
 │   └── web/                 # web'den indirilenler (git'e eklenmez)
+├── elalem_sifre.txt         # panel şifresi (git'e eklenmez)
 └── elalem_checkpoint*.pt    # eğitilmiş ağırlıklar (git'e eklenmez)
 ```
 
@@ -375,6 +400,7 @@ elalem/
 ## Güvenlik
 
 - Sunucu varsayılan olarak sadece `127.0.0.1`'i dinler, ağdaki başka cihazlar erişemez.
+- Panel ve yönetim uçları şifrelidir; şifre `hmac.compare_digest` ile karşılaştırılır, oturum anahtarı `secrets` ile üretilir ve HttpOnly, SameSite=Lax çerezde tutulur (tünel HTTPS ise Secure). Hatalı denemeler yavaşlatılır ve kilitlenir. `elalem_sifre.txt` git'e eklenmez.
 - Önizleme, `allow-same-origin` olmadan sandbox'lı bir `iframe` içinde çalışır; üretilen JS paneline ya da API'ye erişemez.
 - Üretilen Python kodu **hiçbir zaman çalıştırılmaz**, sadece `ast.parse` ile ayrıştırılır.
 - İstek gövdesi 1 MB ile, prompt 1.000 karakterle, üretim 2.000 karakterle sınırlıdır.
